@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const errorHandler = require("./middlewares/errorHandler");
+const pool = require("./config/db");
 
 const app = express();
 
@@ -10,6 +11,35 @@ app.use(express.json());
 
 app.get("/", (req, res) => {
   res.json({ message: "API Colegio App funcionando." });
+});
+
+app.get("/api/test-db", async (req, res, next) => {
+  try {
+    const [rows] = await pool.query("SELECT 1 + 1 AS resultado");
+
+    res.json({
+      ok: true,
+      mensaje: "Conexion a MySQL exitosa",
+      data: rows[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/cursos", async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      "SELECT id, nombre, nivel, jornada, estado FROM cursos ORDER BY nombre ASC"
+    );
+
+    res.json({
+      ok: true,
+      data: rows,
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.use("/", authRoutes);
