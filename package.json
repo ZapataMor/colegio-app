@@ -1,0 +1,16 @@
+{
+  "name": "colegio-app",
+  "version": "1.0.0",
+  "description": "App de colegio con login por roles - Backend (Express) + Frontend (Expo)",
+  "private": true,
+  "scripts": {
+    "dev:all": "node start-dev.js",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm start",
+    "setup": "cd backend && npm install && cd ../frontend && npm install",
+    "seed": "cd backend && npm run seed"
+  },
+  "keywords": ["colegio", "login", "roles", "express", "expo"],
+  "author": "",
+  "license": "ISC"
+}
