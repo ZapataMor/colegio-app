@@ -14,19 +14,19 @@ como primera tarea debes:
 
 ## RESUMEN EJECUTIVO (03/06/2026)
 
-Backend CRUD completo (usuarios, estudiantes, profesores + roles/cursos). Frontend con listas, formularios modales y alta/edición/baja conectados a la API. Login y dashboard operativos.
+Backend CRUD completo (usuarios, estudiantes, profesores, matrículas + roles/cursos). Frontend con listas y formularios modales en todos los módulos CRUD. Login y dashboard operativos.
 
 ---
 
 ## ACTUALIZACIÓN v4 (03/06/2026 - CRUD)
 
 ### Backend
-- `GET/POST/PUT/DELETE` `/api/usuarios`, `/api/estudiantes`, `/api/profesores`
+- `GET/POST/PUT/DELETE` `/api/usuarios`, `/api/estudiantes`, `/api/profesores`, `/api/matriculas`
 - `GET /api/roles`, `GET /api/cursos`
 - Script `npm run seed` en `backend/`
 
 ### Frontend
-- Pantallas CRUD en Usuarios, Estudiantes y Profesores (lista + modal crear/editar + eliminar)
+- Pantallas CRUD en Usuarios, Estudiantes, Profesores y Matrícula (lista + modal + filtro por año)
 - Cliente API compartido (`src/lib/api.ts`, `src/lib/session.ts`)
 
 ---

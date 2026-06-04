@@ -3,6 +3,7 @@ const pool = require("../src/config/db");
 const userModel = require("../src/models/userModel");
 const estudianteModel = require("../src/models/estudianteModel");
 const profesorModel = require("../src/models/profesorModel");
+const matriculaModel = require("../src/models/matriculaModel");
 
 const usuarios = [
   {
@@ -203,6 +204,28 @@ const seed = async () => {
       });
 
       console.log(`  ✓ Estudiante ${estudiante.nombres} ${estudiante.apellidos} creado (ID: ${estudianteId})`);
+    }
+
+    // 4. Crear matrículas de ejemplo
+    console.log("\n📋 Creando matrículas...");
+    const anioActual = new Date().getFullYear();
+    const [todosEstudiantes] = await pool.query(
+      "SELECT id, curso_id FROM estudiantes WHERE estado = 'activo' LIMIT 10"
+    );
+
+    for (const est of todosEstudiantes) {
+      const existente = await matriculaModel.findByEstudianteAnio(est.id, anioActual);
+      if (existente) {
+        console.log(`  ✓ Matrícula estudiante ID ${est.id} ya existe para ${anioActual}`);
+        continue;
+      }
+
+      const matriculaId = await matriculaModel.create({
+        estudianteId: est.id,
+        cursoId: est.curso_id,
+        anio: anioActual,
+      });
+      console.log(`  ✓ Matrícula creada (ID: ${matriculaId}) estudiante ${est.id}`);
     }
 
     console.log("\n✅ Seeding completado!\n");
