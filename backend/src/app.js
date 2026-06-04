@@ -1,6 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
+const usuarioRoutes = require("./routes/usuarioRoutes");
+const estudianteRoutes = require("./routes/estudianteRoutes");
+const profesorRoutes = require("./routes/profesorRoutes");
+const rolRoutes = require("./routes/rolRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const pool = require("./config/db");
 
@@ -43,6 +47,10 @@ app.get("/api/cursos", async (req, res, next) => {
 });
 
 app.use("/", authRoutes);
+app.use("/", usuarioRoutes);
+app.use("/", estudianteRoutes);
+app.use("/", profesorRoutes);
+app.use("/", rolRoutes);
 
 app.use(errorHandler);
 

@@ -11,15 +11,7 @@ import {
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { getUserSession, setUserSession } from '../index';
-
-type UserSession = {
-  id: number;
-  nombre: string;
-  apellido: string;
-  correo: string;
-  rol: string;
-};
+import { getUserSession, setUserSession, type UserSession } from '@/lib/session';
 
 type Modulo = {
   id: string;

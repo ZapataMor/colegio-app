@@ -12,17 +12,22 @@ como primera tarea debes:
 
 ---
 
-## RESUMEN EJECUTIVO (04/06/2026) - ESTADO FINAL COMPLETADO
+## RESUMEN EJECUTIVO (03/06/2026)
 
-**Sistema: 100% Operativo con Dashboard Modular** ✓
+Backend CRUD completo (usuarios, estudiantes, profesores + roles/cursos). Frontend con listas, formularios modales y alta/edición/baja conectados a la API. Login y dashboard operativos.
 
-- **Backend:** Express + MySQL en localhost:3001 ✓
-- **Frontend:** Expo React Native en localhost:8081 ✓
-- **Autenticación:** JWT + localStorage persistente ✓
-- **Dashboard:** 5 módulos navegables (Matrícula, Estudiantes, Profesores, Usuarios, Salones) ✓
-- **Flujo:** Login → Dashboard → Módulos → Atrás → Logout ✓
+---
 
-Todas las rutas, navegación y persistencia de sesión implementadas y verificadas.
+## ACTUALIZACIÓN v4 (03/06/2026 - CRUD)
+
+### Backend
+- `GET/POST/PUT/DELETE` `/api/usuarios`, `/api/estudiantes`, `/api/profesores`
+- `GET /api/roles`, `GET /api/cursos`
+- Script `npm run seed` en `backend/`
+
+### Frontend
+- Pantallas CRUD en Usuarios, Estudiantes y Profesores (lista + modal crear/editar + eliminar)
+- Cliente API compartido (`src/lib/api.ts`, `src/lib/session.ts`)
 
 ---
 

@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useMemo, useState, useEffect } from 'react';
 import {
@@ -15,45 +14,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { getApiUrl } from '@/lib/api';
+import { getUserSession, setUserSession } from '@/lib/session';
+
+export { getUserSession, setUserSession } from '@/lib/session';
 
 type LoginState = 'idle' | 'loading' | 'success' | 'error';
-
-function getApiUrl() {
-  const hostUri = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoClient?.hostUri;
-  const host = hostUri?.split(':')[0];
-
-  if (host) {
-    return `http://${host}:3001`;
-  }
-
-  return 'http://localhost:3001';
-}
-
-// Store global para mantener sesión en memoria
-let userSessionGlobal: any = null;
-
-export function setUserSession(session: any) {
-  userSessionGlobal = session;
-  // Guardar en localStorage para web
-  if (typeof window !== 'undefined') {
-    if (session) {
-      window.localStorage.setItem('userSession', JSON.stringify(session));
-    } else {
-      window.localStorage.removeItem('userSession');
-    }
-  }
-}
-
-export function getUserSession() {
-  // Intentar recuperar de localStorage primero
-  if (typeof window !== 'undefined' && !userSessionGlobal) {
-    const stored = window.localStorage.getItem('userSession');
-    if (stored) {
-      userSessionGlobal = JSON.parse(stored);
-    }
-  }
-  return userSessionGlobal;
-}
 
 export default function LoginScreen() {
   const router = useRouter();
