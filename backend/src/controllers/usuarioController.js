@@ -1,15 +1,17 @@
 const userModel = require("../models/userModel");
+const personaModel = require("../models/personaModel");
+const pool = require("../config/db");
 const bcrypt = require("bcryptjs");
 
-/**
- * GET /api/usuarios
- * Obtiene lista de todos los usuarios con filtro opcional de estado
- */
 const getAllUsers = async (req, res, next) => {
   try {
-    const { estado } = req.query;
+    const { estado, rol, q } = req.query;
 
-    const usuarios = await userModel.findAll(estado);
+    const usuarios = await userModel.findAll({
+      estado: estado || null,
+      rol: rol || null,
+      q: q?.trim() || null,
+    });
 
     return res.json({
       ok: true,
@@ -21,86 +23,112 @@ const getAllUsers = async (req, res, next) => {
   }
 };
 
-/**
- * GET /api/usuarios/:id
- * Obtiene los detalles de un usuario específico
- */
 const getUserById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
     if (!id || isNaN(id)) {
-      return res.status(400).json({
-        ok: false,
-        message: "ID de usuario inválido.",
-      });
+      return res.status(400).json({ ok: false, message: "ID de usuario inválido." });
     }
 
     const usuario = await userModel.findById(id);
 
     if (!usuario) {
-      return res.status(404).json({
-        ok: false,
-        message: "Usuario no encontrado.",
-      });
+      return res.status(404).json({ ok: false, message: "Usuario no encontrado." });
     }
+
+    const roles = await userModel.getRolesForPersona(usuario.persona_id);
 
     return res.json({
       ok: true,
       message: "Usuario obtenido correctamente.",
-      data: usuario,
+      data: { ...usuario, roles_list: roles },
     });
   } catch (error) {
     return next(error);
   }
 };
 
-/**
- * POST /api/usuarios
- * Crea un nuevo usuario
- */
 const createUser = async (req, res, next) => {
   try {
-    const { rolId, nombre, apellido, correo, contrasena, telefono } = req.body;
+    const { personaId, rolId, contrasena } = req.body;
 
-    // Validaciones
-    if (!rolId || !nombre || !apellido || !correo || !contrasena) {
+    if (!personaId || !rolId || !contrasena) {
       return res.status(400).json({
         ok: false,
-        message: "rolId, nombre, apellido, correo y contrasena son obligatorios.",
+        message: "personaId, rolId y contrasena son obligatorios.",
       });
     }
 
-    const correoLower = correo.trim().toLowerCase();
+    if (contrasena.length < 6) {
+      return res.status(400).json({
+        ok: false,
+        message: "La contraseña debe tener al menos 6 caracteres.",
+      });
+    }
 
-    // Verifica si el correo ya existe
-    const usuarioExistente = await userModel.findByCorreo(correoLower);
-    if (usuarioExistente) {
+    const persona = await personaModel.findById(personaId);
+
+    if (!persona) {
+      return res.status(404).json({ ok: false, message: "Persona no encontrada." });
+    }
+
+    if (persona.usuario_id) {
       return res.status(409).json({
         ok: false,
-        message: "El correo ya está registrado.",
+        message: "Esta persona ya tiene un usuario de acceso.",
       });
     }
 
-    // Hash de la contraseña
+    const [roles] = await pool.query(`SELECT id, nombre FROM roles WHERE id = ? LIMIT 1`, [rolId]);
+
+    if (!roles[0]) {
+      return res.status(400).json({ ok: false, message: "Rol no válido." });
+    }
+
+    const tienePerfil = await personaModel.hasProfileForRole(personaId, roles[0].nombre);
+
+    if (!tienePerfil) {
+      return res.status(400).json({
+        ok: false,
+        message: `La persona no tiene ficha de ${roles[0].nombre}. Créala primero en el módulo correspondiente.`,
+      });
+    }
+
+    const usuarioConCorreo = persona.correo
+      ? await userModel.findByCorreo(persona.correo.trim().toLowerCase())
+      : null;
+
+    if (usuarioConCorreo) {
+      return res.status(409).json({
+        ok: false,
+        message: "Ya existe un usuario con el correo de esta persona.",
+      });
+    }
+
     const passwordHash = await bcrypt.hash(contrasena, 10);
 
-    // Crea el usuario
-    const userId = await userModel.createUser({
-      rolId,
-      nombre: nombre.trim(),
-      apellido: apellido.trim(),
-      correo: correoLower,
-      passwordHash,
-      telefono: telefono?.trim() || null,
-    });
+    let userId;
 
-    // Obtiene el usuario creado
+    try {
+      userId = await userModel.createUserFromPersona({
+        personaId,
+        rolId,
+        passwordHash,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      return res.status(status).json({
+        ok: false,
+        message: error.message || "Error al crear el usuario.",
+      });
+    }
+
     const usuarioCreado = await userModel.findById(userId);
 
     return res.status(201).json({
       ok: true,
-      message: "Usuario creado correctamente.",
+      message: "Usuario de acceso creado correctamente.",
       data: usuarioCreado,
     });
   } catch (error) {
@@ -108,47 +136,66 @@ const createUser = async (req, res, next) => {
   }
 };
 
-/**
- * PUT /api/usuarios/:id
- * Actualiza un usuario existente
- */
 const updateUser = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { nombre, apellido, telefono, estado } = req.body;
+    const {
+      nombres,
+      apellidos,
+      correo,
+      telefono,
+      documento,
+      tipoDocumento,
+      estado,
+      rolId,
+      contrasena,
+    } = req.body;
 
     if (!id || isNaN(id)) {
-      return res.status(400).json({
-        ok: false,
-        message: "ID de usuario inválido.",
-      });
+      return res.status(400).json({ ok: false, message: "ID de usuario inválido." });
     }
 
-    // Verifica que el usuario exista
     const usuarioExistente = await userModel.findById(id);
+
     if (!usuarioExistente) {
-      return res.status(404).json({
+      return res.status(404).json({ ok: false, message: "Usuario no encontrado." });
+    }
+
+    let passwordHash;
+    if (contrasena !== undefined && contrasena !== null && contrasena !== "") {
+      if (contrasena.length < 6) {
+        return res.status(400).json({
+          ok: false,
+          message: "La contraseña debe tener al menos 6 caracteres.",
+        });
+      }
+      passwordHash = await bcrypt.hash(contrasena, 10);
+    }
+
+    try {
+      const actualizado = await userModel.updateUser(id, {
+        nombres: nombres?.trim(),
+        apellidos: apellidos?.trim(),
+        correo: correo?.trim().toLowerCase(),
+        telefono: telefono?.trim() || null,
+        documento: documento?.trim(),
+        tipoDocumento,
+        estado,
+        rolId,
+        passwordHash,
+      });
+
+      if (!actualizado) {
+        return res.status(400).json({ ok: false, message: "No hay campos para actualizar." });
+      }
+    } catch (error) {
+      const status = error.statusCode || 500;
+      return res.status(status).json({
         ok: false,
-        message: "Usuario no encontrado.",
+        message: error.message || "Error al actualizar el usuario.",
       });
     }
 
-    // Actualiza el usuario
-    const actualizado = await userModel.updateUser(id, {
-      nombre: nombre?.trim(),
-      apellido: apellido?.trim(),
-      telefono: telefono?.trim() || null,
-      estado,
-    });
-
-    if (!actualizado) {
-      return res.status(400).json({
-        ok: false,
-        message: "No hay campos para actualizar.",
-      });
-    }
-
-    // Obtiene el usuario actualizado
     const usuarioActualizado = await userModel.findById(id);
 
     return res.json({
@@ -161,44 +208,27 @@ const updateUser = async (req, res, next) => {
   }
 };
 
-/**
- * DELETE /api/usuarios/:id
- * Elimina un usuario
- */
 const deleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
 
     if (!id || isNaN(id)) {
-      return res.status(400).json({
-        ok: false,
-        message: "ID de usuario inválido.",
-      });
+      return res.status(400).json({ ok: false, message: "ID de usuario inválido." });
     }
 
-    // Verifica que el usuario exista
     const usuarioExistente = await userModel.findById(id);
+
     if (!usuarioExistente) {
-      return res.status(404).json({
-        ok: false,
-        message: "Usuario no encontrado.",
-      });
+      return res.status(404).json({ ok: false, message: "Usuario no encontrado." });
     }
 
-    // Elimina el usuario
     const eliminado = await userModel.deleteUser(id);
 
     if (!eliminado) {
-      return res.status(500).json({
-        ok: false,
-        message: "Error al eliminar el usuario.",
-      });
+      return res.status(500).json({ ok: false, message: "Error al eliminar el usuario." });
     }
 
-    return res.json({
-      ok: true,
-      message: "Usuario eliminado correctamente.",
-    });
+    return res.json({ ok: true, message: "Usuario eliminado correctamente." });
   } catch (error) {
     return next(error);
   }

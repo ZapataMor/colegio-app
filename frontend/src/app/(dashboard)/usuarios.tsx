@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -15,49 +16,157 @@ import {
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
+import { SearchBar } from '@/components/crud/SearchBar';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { apiFetch } from '@/lib/api';
 
 type Rol = { id: number; nombre: string };
-type Usuario = {
+type PersonaDisponible = {
   id: number;
-  nombre: string;
-  apellido: string;
+  nombres: string;
+  apellidos: string;
+  documento: string;
   correo: string;
   telefono: string | null;
+};
+type Usuario = {
+  id: number;
+  persona_id: number;
+  nombres: string;
+  apellidos: string;
+  correo: string;
+  documento: string;
+  telefono: string | null;
+  tipo_documento?: string;
   estado: string;
-  rol_id: number;
   rol: string;
+  roles: string;
+  rol_id?: number;
 };
 
-const emptyForm = {
-  rolId: '',
-  nombre: '',
-  apellido: '',
-  correo: '',
+const TIPOS_USUARIO = [
+  { value: 'administrador', label: 'Administrador' },
+  { value: 'profesor', label: 'Profesor' },
+  { value: 'estudiante', label: 'Estudiante' },
+  { value: 'acudiente', label: 'Acudiente' },
+];
+
+const TIPOS_DOC = [
+  { value: 'CC', label: 'CC' },
+  { value: 'TI', label: 'TI' },
+  { value: 'CE', label: 'CE' },
+  { value: 'PP', label: 'PP' },
+  { value: 'RC', label: 'RC' },
+];
+
+const ESTADOS_CUENTA = [
+  { value: 'activo', label: 'Activo' },
+  { value: 'inactivo', label: 'Inactivo' },
+  { value: 'bloqueado', label: 'Bloqueado' },
+];
+
+const FILTRO_ESTADO = [
+  { value: '', label: 'Todos' },
+  ...ESTADOS_CUENTA,
+];
+
+const FILTRO_ROL = [{ value: '', label: 'Todos los roles' }, ...TIPOS_USUARIO];
+
+const emptyCreate = {
+  tipoRol: 'profesor',
+  personaId: '',
   contrasena: '',
-  telefono: '',
-  estado: 'activo',
 };
+
+const emptyEdit = {
+  nombres: '',
+  apellidos: '',
+  correo: '',
+  telefono: '',
+  documento: '',
+  tipoDocumento: 'CC',
+  tipoRol: '',
+  estado: 'activo',
+  contrasena: '',
+  confirmarContrasena: '',
+};
+
+function getInitials(nombres: string, apellidos: string) {
+  return `${nombres.charAt(0)}${apellidos.charAt(0)}`.toUpperCase();
+}
+
+function RoleBadge({ rol }: { rol: string }) {
+  const colors: Record<string, { bg: string; text: string }> = {
+    administrador: { bg: '#EDE9FE', text: '#6D28D9' },
+    profesor: { bg: '#DBEAFE', text: '#1D4ED8' },
+    estudiante: { bg: '#D1FAE5', text: '#047857' },
+    acudiente: { bg: '#FEF3C7', text: '#B45309' },
+  };
+  const c = colors[rol] ?? { bg: '#F3F4F6', text: '#374151' };
+
+  return (
+    <View style={[styles.roleBadge, { backgroundColor: c.bg }]}>
+      <ThemedText style={[styles.roleBadgeText, { color: c.text }]}>{rol}</ThemedText>
+    </View>
+  );
+}
+
+function StatusBadge({ estado }: { estado: string }) {
+  const isActive = estado === 'activo';
+  const isBlocked = estado === 'bloqueado';
+
+  return (
+    <View
+      style={[
+        styles.statusBadge,
+        isActive && styles.statusActive,
+        isBlocked && styles.statusBlocked,
+        !isActive && !isBlocked && styles.statusInactive,
+      ]}>
+      <ThemedText style={styles.statusBadgeText}>{estado}</ThemedText>
+    </View>
+  );
+}
 
 export default function UsuariosScreen() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
+  const [personas, setPersonas] = useState<PersonaDisponible[]>([]);
+  const [loadingPersonas, setLoadingPersonas] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<Usuario | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [createForm, setCreateForm] = useState(emptyCreate);
+  const [editForm, setEditForm] = useState(emptyEdit);
   const [saving, setSaving] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+  const [filtroRol, setFiltroRol] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda.trim()), 350);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  const buildQuery = useCallback(() => {
+    const params = new URLSearchParams();
+    if (busquedaDebounced) params.set('q', busquedaDebounced);
+    if (filtroEstado) params.set('estado', filtroEstado);
+    if (filtroRol) params.set('rol', filtroRol);
+    const qs = params.toString();
+    return qs ? `/api/usuarios?${qs}` : '/api/usuarios';
+  }, [busquedaDebounced, filtroEstado, filtroRol]);
+
+  const loadUsuarios = useCallback(async () => {
     try {
       setError('');
       const [usuariosRes, rolesRes] = await Promise.all([
-        apiFetch<Usuario[]>('/api/usuarios'),
+        apiFetch<Usuario[]>(buildQuery()),
         apiFetch<Rol[]>('/api/roles'),
       ]);
       setUsuarios(usuariosRes.data ?? []);
@@ -68,75 +177,126 @@ export default function UsuariosScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [buildQuery]);
+
+  const loadPersonasDisponibles = useCallback(async (tipoRol: string) => {
+    setLoadingPersonas(true);
+    try {
+      const res = await apiFetch<PersonaDisponible[]>(
+        `/api/personas/disponibles-usuario?rol=${encodeURIComponent(tipoRol)}`
+      );
+      const lista = res.data ?? [];
+      setPersonas(lista);
+      setCreateForm((f) => ({ ...f, personaId: lista[0] ? String(lista[0].id) : '' }));
+    } catch {
+      setPersonas([]);
+      setCreateForm((f) => ({ ...f, personaId: '' }));
+    } finally {
+      setLoadingPersonas(false);
+    }
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    setLoading(true);
+    loadUsuarios();
+  }, [loadUsuarios]);
+
+  useEffect(() => {
+    if (modalVisible && !editing) {
+      loadPersonasDisponibles(createForm.tipoRol);
+    }
+  }, [modalVisible, editing, createForm.tipoRol, loadPersonasDisponibles]);
+
+  const stats = useMemo(() => {
+    const activos = usuarios.filter((u) => u.estado === 'activo').length;
+    return { total: usuarios.length, activos };
+  }, [usuarios]);
 
   const openCreate = () => {
     setEditing(null);
-    setForm({
-      ...emptyForm,
-      rolId: roles[0] ? String(roles[0].id) : '',
-    });
+    setCreateForm(emptyCreate);
     setModalVisible(true);
   };
 
   const openEdit = (usuario: Usuario) => {
     setEditing(usuario);
-    setForm({
-      rolId: String(usuario.rol_id),
-      nombre: usuario.nombre,
-      apellido: usuario.apellido,
+    setEditForm({
+      nombres: usuario.nombres,
+      apellidos: usuario.apellidos,
       correo: usuario.correo,
-      contrasena: '',
       telefono: usuario.telefono ?? '',
+      documento: usuario.documento,
+      tipoDocumento: usuario.tipo_documento ?? 'CC',
+      tipoRol: usuario.rol || TIPOS_USUARIO[0].value,
       estado: usuario.estado,
+      contrasena: '',
+      confirmarContrasena: '',
     });
     setModalVisible(true);
   };
 
+  const getRolIdByNombre = (nombre: string) => roles.find((r) => r.nombre === nombre)?.id;
+
   const handleSave = async () => {
-    if (!form.nombre.trim() || !form.apellido.trim()) {
-      Alert.alert('Validación', 'Nombre y apellido son obligatorios.');
+    if (editing) {
+      if (editForm.contrasena && editForm.contrasena !== editForm.confirmarContrasena) {
+        Alert.alert('Validación', 'Las contraseñas no coinciden.');
+        return;
+      }
+
+      const rolId = getRolIdByNombre(editForm.tipoRol);
+      if (!rolId) {
+        Alert.alert('Validación', 'Selecciona un rol válido.');
+        return;
+      }
+
+      setSaving(true);
+      try {
+        const body: Record<string, unknown> = {
+          nombres: editForm.nombres.trim(),
+          apellidos: editForm.apellidos.trim(),
+          correo: editForm.correo.trim(),
+          telefono: editForm.telefono.trim() || null,
+          documento: editForm.documento.trim(),
+          tipoDocumento: editForm.tipoDocumento,
+          estado: editForm.estado,
+          rolId,
+        };
+        if (editForm.contrasena.trim()) {
+          body.contrasena = editForm.contrasena;
+        }
+
+        await apiFetch(`/api/usuarios/${editing.id}`, { method: 'PUT', body });
+        setModalVisible(false);
+        await loadUsuarios();
+      } catch (err) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar.');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    const rolId = getRolIdByNombre(createForm.tipoRol);
+    if (!rolId || !createForm.personaId || !createForm.contrasena.trim()) {
+      Alert.alert('Validación', 'Selecciona tipo, persona y contraseña.');
       return;
     }
 
     setSaving(true);
     try {
-      if (editing) {
-        await apiFetch(`/api/usuarios/${editing.id}`, {
-          method: 'PUT',
-          body: {
-            nombre: form.nombre.trim(),
-            apellido: form.apellido.trim(),
-            telefono: form.telefono.trim() || null,
-            estado: form.estado,
-          },
-        });
-      } else {
-        if (!form.correo.trim() || !form.contrasena.trim() || !form.rolId) {
-          Alert.alert('Validación', 'Rol, correo y contraseña son obligatorios al crear.');
-          setSaving(false);
-          return;
-        }
-        await apiFetch('/api/usuarios', {
-          method: 'POST',
-          body: {
-            rolId: Number(form.rolId),
-            nombre: form.nombre.trim(),
-            apellido: form.apellido.trim(),
-            correo: form.correo.trim(),
-            contrasena: form.contrasena,
-            telefono: form.telefono.trim() || null,
-          },
-        });
-      }
+      await apiFetch('/api/usuarios', {
+        method: 'POST',
+        body: {
+          personaId: Number(createForm.personaId),
+          rolId,
+          contrasena: createForm.contrasena,
+        },
+      });
       setModalVisible(false);
-      await loadData();
+      await loadUsuarios();
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar.');
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo crear el usuario.');
     } finally {
       setSaving(false);
     }
@@ -144,8 +304,8 @@ export default function UsuariosScreen() {
 
   const handleDelete = (usuario: Usuario) => {
     Alert.alert(
-      'Eliminar usuario',
-      `¿Eliminar a ${usuario.nombre} ${usuario.apellido}?`,
+      'Eliminar acceso',
+      `¿Quitar el acceso de ${usuario.nombres} ${usuario.apellidos}?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -154,7 +314,7 @@ export default function UsuariosScreen() {
           onPress: async () => {
             try {
               await apiFetch(`/api/usuarios/${usuario.id}`, { method: 'DELETE' });
-              await loadData();
+              await loadUsuarios();
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
             }
@@ -164,129 +324,276 @@ export default function UsuariosScreen() {
     );
   };
 
+  const renderUserCard = ({ item }: { item: Usuario }) => {
+    const rolesList = (item.roles || item.rol || '')
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean);
+
+    return (
+      <ThemedView type="backgroundElement" style={styles.card}>
+        <View style={styles.avatar}>
+          <ThemedText style={styles.avatarText}>
+            {getInitials(item.nombres, item.apellidos)}
+          </ThemedText>
+        </View>
+
+        <View style={styles.cardBody}>
+          <View style={styles.cardTitleRow}>
+            <ThemedText type="subtitle" style={styles.cardName}>
+              {item.nombres} {item.apellidos}
+            </ThemedText>
+            <StatusBadge estado={item.estado} />
+          </View>
+          <ThemedText type="small" style={styles.cardEmail}>
+            {item.correo}
+          </ThemedText>
+          <ThemedText type="small" style={styles.cardMeta}>
+            {item.tipo_documento ?? 'CC'} {item.documento}
+            {item.telefono ? ` · ${item.telefono}` : ''}
+          </ThemedText>
+          <View style={styles.rolesRow}>
+            {rolesList.map((r) => (
+              <RoleBadge key={r} rol={r} />
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.cardActions}>
+          <Pressable
+            onPress={() => openEdit(item)}
+            style={({ pressed }) => [styles.iconBtn, styles.iconBtnEdit, pressed && styles.pressed]}>
+            <ThemedText style={styles.iconBtnEditText}>✎</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => handleDelete(item)}
+            style={({ pressed }) => [styles.iconBtn, styles.iconBtnDelete, pressed && styles.pressed]}>
+            <ThemedText style={styles.iconBtnDeleteText}>🗑</ThemedText>
+          </Pressable>
+        </View>
+      </ThemedView>
+    );
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ModuleHeader title="Usuarios" onAdd={openCreate} />
+        <View style={styles.page}>
+          <ModuleHeader title="Usuarios" onAdd={openCreate} addLabel="+ Acceso" />
 
-        {loading ? (
-          <ActivityIndicator size="large" color="#2563EB" style={styles.loader} />
-        ) : error ? (
-          <ThemedText style={styles.errorText}>{error}</ThemedText>
-        ) : (
-          <FlatList
-            data={usuarios}
-            keyExtractor={(item) => String(item.id)}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => {
-                  setRefreshing(true);
-                  loadData();
-                }}
-              />
-            }
-            ListEmptyComponent={
-              <ThemedText style={styles.emptyText}>No hay usuarios registrados.</ThemedText>
-            }
-            renderItem={({ item }) => (
-              <ThemedView type="backgroundElement" style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <ThemedText type="subtitle">
-                    {item.nombre} {item.apellido}
+          <ThemedText type="small" style={styles.helpText}>
+            Administra accesos al sistema. Cada usuario está vinculado a una persona registrada.
+          </ThemedText>
+
+          <View style={styles.statsRow}>
+            <ThemedView type="backgroundElement" style={styles.statCard}>
+              <ThemedText type="small" style={styles.statLabel}>
+                Total
+              </ThemedText>
+              <ThemedText type="title" style={styles.statValue}>
+                {stats.total}
+              </ThemedText>
+            </ThemedView>
+            <ThemedView type="backgroundElement" style={styles.statCard}>
+              <ThemedText type="small" style={styles.statLabel}>
+                Activos
+              </ThemedText>
+              <ThemedText type="title" style={[styles.statValue, styles.statValueGreen]}>
+                {stats.activos}
+              </ThemedText>
+            </ThemedView>
+          </View>
+
+          <SearchBar value={busqueda} onChangeText={setBusqueda} />
+
+          <View style={styles.filtersBlock}>
+            <ThemedText type="small" style={styles.filterLabel}>
+              Estado
+            </ThemedText>
+            <OptionChips
+              label=""
+              options={FILTRO_ESTADO}
+              value={filtroEstado}
+              onChange={setFiltroEstado}
+            />
+            <ThemedText type="small" style={[styles.filterLabel, styles.filterLabelSpaced]}>
+              Rol
+            </ThemedText>
+            <OptionChips label="" options={FILTRO_ROL} value={filtroRol} onChange={setFiltroRol} />
+          </View>
+
+          {loading ? (
+            <ActivityIndicator size="large" color="#2563EB" style={styles.loader} />
+          ) : error ? (
+            <ThemedText style={styles.errorText}>{error}</ThemedText>
+          ) : (
+            <FlatList
+              data={usuarios}
+              keyExtractor={(item) => String(item.id)}
+              renderItem={renderUserCard}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={() => {
+                    setRefreshing(true);
+                    loadUsuarios();
+                  }}
+                />
+              }
+              ListEmptyComponent={
+                <ThemedView type="backgroundElement" style={styles.emptyBox}>
+                  <ThemedText style={styles.emptyText}>
+                    No se encontraron usuarios con los filtros aplicados.
                   </ThemedText>
-                  <ThemedText
-                    type="small"
-                    style={item.estado === 'activo' ? styles.badgeActive : styles.badgeInactive}>
-                    {item.estado}
-                  </ThemedText>
-                </View>
-                <ThemedText type="small">{item.correo}</ThemedText>
-                <ThemedText type="small" style={styles.muted}>
-                  Rol: {item.rol}
-                </ThemedText>
-                <View style={styles.actions}>
-                  <Pressable onPress={() => openEdit(item)} style={styles.editBtn}>
-                    <ThemedText style={styles.editBtnText}>Editar</ThemedText>
-                  </Pressable>
-                  <Pressable onPress={() => handleDelete(item)} style={styles.deleteBtn}>
-                    <ThemedText style={styles.deleteBtnText}>Eliminar</ThemedText>
-                  </Pressable>
-                </View>
-              </ThemedView>
-            )}
-            contentContainerStyle={styles.list}
-          />
-        )}
+                </ThemedView>
+              }
+              contentContainerStyle={styles.list}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </View>
 
         <Modal visible={modalVisible} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
             <ThemedView style={styles.modalContent}>
               <ThemedText type="title" style={styles.modalTitle}>
-                {editing ? 'Editar usuario' : 'Nuevo usuario'}
+                {editing ? 'Editar usuario' : 'Nuevo acceso'}
               </ThemedText>
-              <ScrollView contentContainerStyle={styles.form}>
-                {!editing && (
+
+              <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false}>
+                {editing ? (
                   <>
-                    <OptionChips
-                      label="Rol"
-                      options={roles.map((r) => ({ value: String(r.id), label: r.nombre }))}
-                      value={form.rolId}
-                      onChange={(rolId) => setForm((f) => ({ ...f, rolId }))}
-                    />
+                    <ThemedText style={styles.sectionTitle}>Datos personales</ThemedText>
+                    <View style={styles.formRow}>
+                      <View style={styles.formHalf}>
+                        <FormField
+                          label="Nombres"
+                          value={editForm.nombres}
+                          onChangeText={(nombres) => setEditForm((f) => ({ ...f, nombres }))}
+                        />
+                      </View>
+                      <View style={styles.formHalf}>
+                        <FormField
+                          label="Apellidos"
+                          value={editForm.apellidos}
+                          onChangeText={(apellidos) => setEditForm((f) => ({ ...f, apellidos }))}
+                        />
+                      </View>
+                    </View>
                     <FormField
-                      label="Correo"
-                      value={form.correo}
-                      onChangeText={(correo) => setForm((f) => ({ ...f, correo }))}
+                      label="Correo (login)"
+                      value={editForm.correo}
+                      onChangeText={(correo) => setEditForm((f) => ({ ...f, correo }))}
                       autoCapitalize="none"
                       keyboardType="email-address"
-                      placeholder="correo@colegio.com"
                     />
                     <FormField
-                      label="Contraseña"
-                      value={form.contrasena}
-                      onChangeText={(contrasena) => setForm((f) => ({ ...f, contrasena }))}
+                      label="Teléfono"
+                      value={editForm.telefono}
+                      onChangeText={(telefono) => setEditForm((f) => ({ ...f, telefono }))}
+                      keyboardType="phone-pad"
+                    />
+                    <OptionChips
+                      label="Tipo documento"
+                      options={TIPOS_DOC}
+                      value={editForm.tipoDocumento}
+                      onChange={(tipoDocumento) => setEditForm((f) => ({ ...f, tipoDocumento }))}
+                    />
+                    <FormField
+                      label="Número de documento"
+                      value={editForm.documento}
+                      onChangeText={(documento) => setEditForm((f) => ({ ...f, documento }))}
+                    />
+
+                    <ThemedText style={styles.sectionTitle}>Acceso al sistema</ThemedText>
+                    <OptionChips
+                      label="Rol principal"
+                      options={TIPOS_USUARIO}
+                      value={editForm.tipoRol}
+                      onChange={(tipoRol) => setEditForm((f) => ({ ...f, tipoRol }))}
+                    />
+                    <OptionChips
+                      label="Estado de la cuenta"
+                      options={ESTADOS_CUENTA}
+                      value={editForm.estado}
+                      onChange={(estado) => setEditForm((f) => ({ ...f, estado }))}
+                    />
+
+                    <ThemedText style={styles.sectionTitle}>Cambiar contraseña</ThemedText>
+                    <ThemedText type="small" style={styles.hint}>
+                      Deja en blanco si no deseas cambiarla.
+                    </ThemedText>
+                    <FormField
+                      label="Nueva contraseña"
+                      value={editForm.contrasena}
+                      onChangeText={(contrasena) => setEditForm((f) => ({ ...f, contrasena }))}
+                      secureTextEntry
+                      placeholder="Mínimo 6 caracteres"
+                    />
+                    <FormField
+                      label="Confirmar contraseña"
+                      value={editForm.confirmarContrasena}
+                      onChangeText={(confirmarContrasena) =>
+                        setEditForm((f) => ({ ...f, confirmarContrasena }))
+                      }
+                      secureTextEntry
+                    />
+                  </>
+                ) : (
+                  <>
+                    <OptionChips
+                      label="Tipo de usuario"
+                      options={TIPOS_USUARIO}
+                      value={createForm.tipoRol}
+                      onChange={(tipoRol) =>
+                        setCreateForm((f) => ({ ...f, tipoRol, personaId: '' }))
+                      }
+                    />
+                    {loadingPersonas ? (
+                      <ActivityIndicator color="#2563EB" />
+                    ) : personas.length === 0 ? (
+                      <ThemedView type="backgroundElement" style={styles.noPersonas}>
+                        <ThemedText type="small" style={styles.hint}>
+                          No hay personas disponibles. Regístrala en el módulo correspondiente con
+                          correo.
+                        </ThemedText>
+                      </ThemedView>
+                    ) : (
+                      <OptionChips
+                        label="Persona"
+                        options={personas.map((p) => ({
+                          value: String(p.id),
+                          label: `${p.apellidos}, ${p.nombres}`,
+                        }))}
+                        value={createForm.personaId}
+                        onChange={(personaId) => setCreateForm((f) => ({ ...f, personaId }))}
+                      />
+                    )}
+                    <FormField
+                      label="Contraseña inicial"
+                      value={createForm.contrasena}
+                      onChangeText={(contrasena) => setCreateForm((f) => ({ ...f, contrasena }))}
                       secureTextEntry
                       placeholder="Mínimo 6 caracteres"
                     />
                   </>
                 )}
-                <FormField
-                  label="Nombre"
-                  value={form.nombre}
-                  onChangeText={(nombre) => setForm((f) => ({ ...f, nombre }))}
-                />
-                <FormField
-                  label="Apellido"
-                  value={form.apellido}
-                  onChangeText={(apellido) => setForm((f) => ({ ...f, apellido }))}
-                />
-                <FormField
-                  label="Teléfono"
-                  value={form.telefono}
-                  onChangeText={(telefono) => setForm((f) => ({ ...f, telefono }))}
-                  keyboardType="phone-pad"
-                />
-                {editing && (
-                  <OptionChips
-                    label="Estado"
-                    options={[
-                      { value: 'activo', label: 'Activo' },
-                      { value: 'inactivo', label: 'Inactivo' },
-                    ]}
-                    value={form.estado}
-                    onChange={(estado) => setForm((f) => ({ ...f, estado }))}
-                  />
-                )}
               </ScrollView>
+
               <View style={styles.modalActions}>
                 <Pressable
                   onPress={() => setModalVisible(false)}
                   style={styles.cancelBtn}
                   disabled={saving}>
-                  <ThemedText>Cancelar</ThemedText>
+                  <ThemedText style={styles.cancelBtnText}>Cancelar</ThemedText>
                 </Pressable>
-                <Pressable onPress={handleSave} style={styles.saveBtn} disabled={saving}>
+                <Pressable
+                  onPress={handleSave}
+                  style={[
+                    styles.saveBtn,
+                    !editing && (!createForm.personaId || personas.length === 0) && styles.saveDisabled,
+                  ]}
+                  disabled={saving || (!editing && (!createForm.personaId || personas.length === 0))}>
                   {saving ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
@@ -304,61 +611,166 @@ export default function UsuariosScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  safeArea: { flex: 1, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
+  safeArea: { flex: 1 },
+  page: {
+    flex: 1,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  helpText: { opacity: 0.65, marginBottom: Spacing.three, lineHeight: 20 },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  statCard: {
+    flex: 1,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    gap: Spacing.one,
+  },
+  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '600' },
+  statValue: { fontSize: 28 },
+  statValueGreen: { color: '#16A34A' },
+  filtersBlock: {
+    marginBottom: Spacing.three,
+    gap: Spacing.one,
+  },
+  filterLabel: { fontWeight: '600', opacity: 0.7, marginLeft: Spacing.one },
+  filterLabelSpaced: { marginTop: Spacing.two },
   loader: { marginTop: Spacing.five },
-  list: { gap: Spacing.three, paddingBottom: Spacing.five },
-  card: { padding: Spacing.three, borderRadius: Spacing.two, gap: Spacing.one },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  muted: { opacity: 0.65 },
-  badgeActive: { color: '#16A34A', fontWeight: '700' },
-  badgeInactive: { color: '#DC2626', fontWeight: '700' },
-  actions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
-  editBtn: {
-    flex: 1,
-    backgroundColor: '#E0E7FF',
+  list: {
+    gap: Spacing.three,
+    paddingBottom: Spacing.six,
+    ...(Platform.OS === 'web' ? { paddingBottom: 80 } : {}),
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.three,
+    borderRadius: 12,
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.06)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+      },
+      default: {},
+    }),
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  cardBody: { flex: 1, gap: 4, minWidth: 0 },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.two,
+    flexWrap: 'wrap',
+  },
+  cardName: { flexShrink: 1, fontSize: 16 },
+  cardEmail: { opacity: 0.85 },
+  cardMeta: { opacity: 0.55, fontSize: 12 },
+  rolesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  roleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  roleBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusActive: { backgroundColor: '#DCFCE7' },
+  statusInactive: { backgroundColor: '#FEE2E2' },
+  statusBlocked: { backgroundColor: '#FEF3C7' },
+  statusBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize', color: '#374151' },
+  cardActions: { flexDirection: 'row', gap: Spacing.two },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconBtnEdit: { backgroundColor: '#EFF6FF' },
+  iconBtnEditText: { fontSize: 18, color: '#2563EB' },
+  iconBtnDelete: { backgroundColor: '#FEF2F2' },
+  iconBtnDeleteText: { fontSize: 16 },
+  pressed: { opacity: 0.7 },
+  emptyBox: {
+    padding: Spacing.five,
     borderRadius: Spacing.two,
-    padding: Spacing.two,
     alignItems: 'center',
   },
-  editBtnText: { color: '#2563EB', fontWeight: '700' },
-  deleteBtn: {
-    flex: 1,
-    backgroundColor: '#FEE2E2',
-    borderRadius: Spacing.two,
-    padding: Spacing.two,
-    alignItems: 'center',
-  },
-  deleteBtnText: { color: '#DC2626', fontWeight: '700' },
-  emptyText: { textAlign: 'center', opacity: 0.6, marginTop: Spacing.five },
-  errorText: { color: '#DC2626', textAlign: 'center' },
+  emptyText: { textAlign: 'center', opacity: 0.6 },
+  errorText: { color: '#DC2626', textAlign: 'center', marginTop: Spacing.four },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalContent: {
-    maxHeight: '90%',
-    borderTopLeftRadius: Spacing.three,
-    borderTopRightRadius: Spacing.three,
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    maxHeight: '92%',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     padding: Spacing.four,
   },
   modalTitle: { marginBottom: Spacing.three },
-  form: { gap: Spacing.three, paddingBottom: Spacing.three },
-  modalActions: { flexDirection: 'row', gap: Spacing.two },
+  form: { gap: Spacing.three, paddingBottom: Spacing.four },
+  sectionTitle: {
+    fontWeight: '800',
+    fontSize: 14,
+    marginTop: Spacing.two,
+    marginBottom: Spacing.one,
+    opacity: 0.85,
+  },
+  formRow: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    gap: Spacing.three,
+  },
+  formHalf: { flex: 1 },
+  hint: { opacity: 0.65, lineHeight: 18 },
+  noPersonas: { padding: Spacing.three, borderRadius: Spacing.two },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Spacing.three,
+    paddingTop: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
   cancelBtn: {
     flex: 1,
     alignItems: 'center',
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
+    paddingVertical: Spacing.three,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#D1D5DB',
   },
+  cancelBtnText: { fontWeight: '600' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
+    paddingVertical: Spacing.three,
+    borderRadius: 10,
     backgroundColor: '#2563EB',
   },
+  saveDisabled: { opacity: 0.45 },
   saveBtnText: { color: '#FFFFFF', fontWeight: '700' },
 });

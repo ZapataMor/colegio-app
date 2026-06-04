@@ -14,7 +14,7 @@ como primera tarea debes:
 
 ## RESUMEN EJECUTIVO (03/06/2026)
 
-Backend CRUD completo (usuarios, estudiantes, profesores, matrículas + roles/cursos). Frontend con listas y formularios modales en todos los módulos CRUD. Login y dashboard operativos.
+Backend v2 personas+roles. Usuarios vinculan persona existente. Dashboard por rol: admin ve módulos; demás roles mensaje de bienvenida sin módulos aún.
 
 ---
 

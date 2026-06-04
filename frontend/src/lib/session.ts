@@ -1,9 +1,12 @@
 export type UserSession = {
   id: number;
+  personaId?: number;
   nombre: string;
   apellido: string;
   correo: string;
   rol: string;
+  roles?: string[];
+  welcomeMessage?: string;
   token?: string;
 };
 

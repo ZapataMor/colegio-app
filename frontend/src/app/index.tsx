@@ -55,14 +55,14 @@ export default function LoginScreen() {
         throw new Error(data.message || 'No fue posible iniciar sesion.');
       }
 
-      // Guardar sesión
       setUserSession({
         ...data.user,
         token: data.token,
+        welcomeMessage: data.welcomeMessage,
       });
 
       setStatus('success');
-      setMessage(data.message || 'Login exitoso.');
+      setMessage(data.welcomeMessage || data.message || 'Login exitoso.');
 
       // Redirigir al dashboard después de 500ms
       setTimeout(() => {

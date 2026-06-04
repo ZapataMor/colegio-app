@@ -82,6 +82,7 @@ const create = async (estudianteData) => {
     nombres,
     apellidos,
     documento,
+    correo = null,
     fechaNacimiento = null,
     genero = null,
     direccion = null,
@@ -102,17 +103,17 @@ const create = async (estudianteData) => {
     if (!personaId) {
       const [personaResult] = await connection.query(
         `INSERT INTO personas
-          (nombres, apellidos, documento, fecha_nacimiento, genero, direccion, telefono, estado)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'activo')`,
-        [nombres, apellidos, documento, fechaNacimiento, genero, direccion, telefonoAcudiente]
+          (nombres, apellidos, documento, correo, fecha_nacimiento, genero, direccion, telefono, estado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'activo')`,
+        [nombres, apellidos, documento, correo, fechaNacimiento, genero, direccion, telefonoAcudiente]
       );
       personaId = personaResult.insertId;
     } else {
       await connection.query(
         `UPDATE personas
-        SET nombres = ?, apellidos = ?, documento = ?, fecha_nacimiento = ?, genero = ?, direccion = ?, telefono = ?, updated_at = CURRENT_TIMESTAMP
+        SET nombres = ?, apellidos = ?, documento = ?, correo = ?, fecha_nacimiento = ?, genero = ?, direccion = ?, telefono = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?`,
-        [nombres, apellidos, documento, fechaNacimiento, genero, direccion, telefonoAcudiente, personaId]
+        [nombres, apellidos, documento, correo, fechaNacimiento, genero, direccion, telefonoAcudiente, personaId]
       );
     }
 

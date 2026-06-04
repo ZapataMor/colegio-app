@@ -12,6 +12,7 @@ const usuarios = [
     rol: "administrador",
     nombre: "Admin",
     apellido: "Principal",
+    documento: "900000001",
   },
   {
     correo: "docente1@colegio.com",
@@ -19,6 +20,7 @@ const usuarios = [
     rol: "profesor",
     nombre: "Juan",
     apellido: "García",
+    documento: "800000001",
   },
   {
     correo: "docente2@colegio.com",
@@ -26,6 +28,7 @@ const usuarios = [
     rol: "profesor",
     nombre: "María",
     apellido: "López",
+    documento: "800000002",
   },
   {
     correo: "estudiante1@colegio.com",
@@ -33,6 +36,7 @@ const usuarios = [
     rol: "estudiante",
     nombre: "Carlos",
     apellido: "Martínez",
+    documento: "700000001",
   },
   {
     correo: "estudiante2@colegio.com",
@@ -40,6 +44,7 @@ const usuarios = [
     rol: "estudiante",
     nombre: "Laura",
     apellido: "Rodríguez",
+    documento: "700000002",
   },
 ];
 
@@ -68,145 +73,124 @@ const estudiantesExtra = [
     apellidos: "Gómez",
     documento: "1111111111",
     genero: "masculino",
-    nombreAcudiente: "Roberto Gómez",
-    telefonoAcudiente: "3009876543",
   },
   {
     nombres: "Sofía",
     apellidos: "Hernández",
     documento: "2222222222",
     genero: "femenino",
-    nombreAcudiente: "Patricia Hernández",
-    telefonoAcudiente: "3008765432",
   },
 ];
+
+const ensurePersona = async (user) => {
+  const [rows] = await pool.query(`SELECT id FROM personas WHERE correo = ? LIMIT 1`, [user.correo]);
+  if (rows[0]) return rows[0].id;
+
+  const [result] = await pool.query(
+    `INSERT INTO personas (nombres, apellidos, tipo_documento, documento, correo, estado)
+    VALUES (?, ?, 'CC', ?, ?, 'activo')`,
+    [user.nombre, user.apellido, user.documento, user.correo]
+  );
+  return result.insertId;
+};
 
 const seed = async () => {
   try {
     console.log("🌱 Iniciando seeding...\n");
 
-    // Obtener roles
     const [roles] = await pool.query("SELECT id, nombre FROM roles");
     const roleByName = new Map(roles.map((role) => [role.nombre, role.id]));
 
-    // Obtener cursos
     const [cursos] = await pool.query("SELECT id, nombre FROM cursos");
     if (cursos.length === 0) {
       throw new Error("No existen cursos. Por favor ejecuta primero el schema.sql");
     }
     const cursoId = cursos[0].id;
 
-    // 1. Crear usuarios
-    console.log("📝 Creando usuarios...");
-    const usuariosCreados = {};
+    console.log("👨‍🏫 Creando profesores (personas)...");
+    for (const user of usuarios.filter((u) => u.rol === "profesor")) {
+      const exists = await profesorModel.findByDocumento(user.documento);
+      if (!exists) {
+        await profesorModel.create({
+          nombres: user.nombre,
+          apellidos: user.apellido,
+          documento: user.documento,
+          correo: user.correo,
+          especialidad: "General",
+        });
+        console.log(`  ✓ Profesor ${user.nombre} ${user.apellido}`);
+      }
+    }
 
+    for (const profesor of profesoresExtra) {
+      const exists = await profesorModel.findByDocumento(profesor.documento);
+      if (!exists) {
+        await profesorModel.create(profesor);
+        console.log(`  ✓ Profesor ${profesor.nombres} ${profesor.apellidos}`);
+      }
+    }
+
+    console.log("\n🎓 Creando estudiantes (personas)...");
+    for (const user of usuarios.filter((u) => u.rol === "estudiante")) {
+      const exists = await estudianteModel.findByDocumento(user.documento);
+      if (!exists) {
+        await estudianteModel.create({
+          cursoId,
+          nombres: user.nombre,
+          apellidos: user.apellido,
+          documento: user.documento,
+          correo: user.correo,
+          genero: "no_especifica",
+        });
+        console.log(`  ✓ Estudiante ${user.nombre} ${user.apellido}`);
+      }
+    }
+
+    for (const estudiante of estudiantesExtra) {
+      const exists = await estudianteModel.findByDocumento(estudiante.documento);
+      if (!exists) {
+        await estudianteModel.create({ cursoId, ...estudiante });
+        console.log(`  ✓ Estudiante ${estudiante.nombres} ${estudiante.apellidos}`);
+      }
+    }
+
+    console.log("\n📝 Creando accesos de usuario...");
     for (const user of usuarios) {
       const rolId = roleByName.get(user.rol);
-
-      if (!rolId) {
-        console.warn(`  ⚠️  Rol ${user.rol} no encontrado`);
-        continue;
-      }
+      if (!rolId) continue;
 
       const existingUser = await userModel.findByCorreo(user.correo);
-
       if (existingUser) {
-        console.log(`  ✓ Usuario ${user.correo} ya existe`);
-        usuariosCreados[user.correo] = existingUser.id;
+        console.log(`  ✓ Acceso ${user.correo} ya existe`);
         continue;
       }
 
-      const hashedPassword = await bcrypt.hash(user.contrasena, 10);
-      const userId = await userModel.createUser({
+      let personaId = null;
+
+      if (user.rol === "administrador") {
+        personaId = await ensurePersona(user);
+      } else if (user.rol === "profesor") {
+        const prof = await profesorModel.findByDocumento(user.documento);
+        personaId = prof?.persona_id;
+      } else if (user.rol === "estudiante") {
+        const est = await estudianteModel.findByDocumento(user.documento);
+        personaId = est?.persona_id;
+      }
+
+      if (!personaId) {
+        console.warn(`  ⚠️  No se encontró persona para ${user.correo}`);
+        continue;
+      }
+
+      const passwordHash = await bcrypt.hash(user.contrasena, 10);
+      const userId = await userModel.createUserFromPersona({
+        personaId,
         rolId,
-        nombre: user.nombre,
-        apellido: user.apellido,
-        correo: user.correo,
-        passwordHash: hashedPassword,
+        passwordHash,
       });
-
-      usuariosCreados[user.correo] = userId;
-      console.log(`  ✓ Usuario ${user.correo} creado (ID: ${userId})`);
+      console.log(`  ✓ Acceso ${user.correo} creado (usuario ID: ${userId})`);
     }
 
-    // 2. Crear profesores
-    console.log("\n👨‍🏫 Creando profesores...");
-
-    // Primero, los profesores que tienen usuarios
-    for (const user of usuarios) {
-      if (roleByName.get(user.rol) === roleByName.get("profesor")) {
-        const existingProfesor = await profesorModel.findByDocumento(`prof_${user.correo}`);
-
-        if (!existingProfesor) {
-          const profesorId = await profesorModel.create({
-            usuarioId: usuariosCreados[user.correo],
-            nombres: user.nombre,
-            apellidos: user.apellido,
-            documento: `prof_${user.correo}`,
-            correo: user.correo,
-            especialidad: "General",
-          });
-
-          console.log(`  ✓ Profesor ${user.nombre} ${user.apellido} creado (ID: ${profesorId})`);
-        }
-      }
-    }
-
-    // Después, profesores adicionales
-    for (const profesor of profesoresExtra) {
-      const existingProfesor = await profesorModel.findByDocumento(profesor.documento);
-
-      if (existingProfesor) {
-        console.log(`  ✓ Profesor con documento ${profesor.documento} ya existe`);
-        continue;
-      }
-
-      const profesorId = await profesorModel.create(profesor);
-      console.log(`  ✓ Profesor ${profesor.nombres} ${profesor.apellidos} creado (ID: ${profesorId})`);
-    }
-
-    // 3. Crear estudiantes
-    console.log("\n🎓 Creando estudiantes...");
-
-    // Primero, los estudiantes que tienen usuarios
-    for (const user of usuarios) {
-      if (roleByName.get(user.rol) === roleByName.get("estudiante")) {
-        const existingEstudiante = await estudianteModel.findByDocumento(`est_${user.correo}`);
-
-        if (!existingEstudiante) {
-          const estudianteId = await estudianteModel.create({
-            usuarioId: usuariosCreados[user.correo],
-            cursoId,
-            nombres: user.nombre,
-            apellidos: user.apellido,
-            documento: `est_${user.correo}`,
-            genero: "no_especifica",
-            nombreAcudiente: "Padre/Acudiente",
-          });
-
-          console.log(`  ✓ Estudiante ${user.nombre} ${user.apellido} creado (ID: ${estudianteId})`);
-        }
-      }
-    }
-
-    // Después, estudiantes adicionales
-    for (const estudiante of estudiantesExtra) {
-      const existingEstudiante = await estudianteModel.findByDocumento(estudiante.documento);
-
-      if (existingEstudiante) {
-        console.log(`  ✓ Estudiante con documento ${estudiante.documento} ya existe`);
-        continue;
-      }
-
-      const estudianteId = await estudianteModel.create({
-        cursoId,
-        ...estudiante,
-      });
-
-      console.log(`  ✓ Estudiante ${estudiante.nombres} ${estudiante.apellidos} creado (ID: ${estudianteId})`);
-    }
-
-    // 4. Crear matrículas de ejemplo
     console.log("\n📋 Creando matrículas...");
     const anioActual = new Date().getFullYear();
     const [todosEstudiantes] = await pool.query(
@@ -215,17 +199,13 @@ const seed = async () => {
 
     for (const est of todosEstudiantes) {
       const existente = await matriculaModel.findByEstudianteAnio(est.id, anioActual);
-      if (existente) {
-        console.log(`  ✓ Matrícula estudiante ID ${est.id} ya existe para ${anioActual}`);
-        continue;
-      }
+      if (existente) continue;
 
-      const matriculaId = await matriculaModel.create({
+      await matriculaModel.create({
         estudianteId: est.id,
         cursoId: est.curso_id,
         anio: anioActual,
       });
-      console.log(`  ✓ Matrícula creada (ID: ${matriculaId}) estudiante ${est.id}`);
     }
 
     console.log("\n✅ Seeding completado!\n");

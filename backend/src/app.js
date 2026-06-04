@@ -6,6 +6,7 @@ const estudianteRoutes = require("./routes/estudianteRoutes");
 const profesorRoutes = require("./routes/profesorRoutes");
 const rolRoutes = require("./routes/rolRoutes");
 const matriculaRoutes = require("./routes/matriculaRoutes");
+const personaRoutes = require("./routes/personaRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const pool = require("./config/db");
 
@@ -53,6 +54,7 @@ app.use("/", estudianteRoutes);
 app.use("/", profesorRoutes);
 app.use("/", rolRoutes);
 app.use("/", matriculaRoutes);
+app.use("/", personaRoutes);
 
 app.use(errorHandler);
 
