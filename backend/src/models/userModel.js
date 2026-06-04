@@ -1,18 +1,31 @@
 const pool = require("../config/db");
 
+const baseUserSelect = `SELECT
+  u.id,
+  u.persona_id,
+  p.nombres AS nombre,
+  p.apellidos AS apellido,
+  p.nombres,
+  p.apellidos,
+  p.correo,
+  p.telefono,
+  p.documento,
+  u.password_hash,
+  u.estado,
+  pr.rol_id,
+  r.nombre AS rol,
+  u.created_at,
+  u.updated_at
+FROM usuarios u
+INNER JOIN personas p ON p.id = u.persona_id
+LEFT JOIN persona_roles pr ON pr.persona_id = p.id AND pr.estado = 'activo'
+LEFT JOIN roles r ON r.id = pr.rol_id`;
+
 const findByCorreo = async (correo) => {
   const [rows] = await pool.query(
-    `SELECT
-      u.id,
-      u.nombre,
-      u.apellido,
-      u.correo,
-      u.password_hash,
-      u.estado,
-      r.nombre AS rol
-    FROM usuarios u
-    INNER JOIN roles r ON r.id = u.rol_id
-    WHERE u.correo = ?
+    `${baseUserSelect}
+    WHERE p.correo = ?
+    ORDER BY pr.id ASC
     LIMIT 1`,
     [correo]
   );
@@ -22,18 +35,9 @@ const findByCorreo = async (correo) => {
 
 const findById = async (id) => {
   const [rows] = await pool.query(
-    `SELECT
-      u.id,
-      u.nombre,
-      u.apellido,
-      u.correo,
-      u.telefono,
-      u.estado,
-      u.rol_id,
-      r.nombre AS rol
-    FROM usuarios u
-    INNER JOIN roles r ON r.id = u.rol_id
+    `${baseUserSelect}
     WHERE u.id = ?
+    ORDER BY pr.id ASC
     LIMIT 1`,
     [id]
   );
@@ -42,20 +46,7 @@ const findById = async (id) => {
 };
 
 const findAll = async (estado = null) => {
-  let query = `SELECT
-    u.id,
-    u.nombre,
-    u.apellido,
-    u.correo,
-    u.telefono,
-    u.estado,
-    u.rol_id,
-    r.nombre AS rol,
-    u.created_at,
-    u.updated_at
-  FROM usuarios u
-  INNER JOIN roles r ON r.id = u.rol_id`;
-
+  let query = baseUserSelect;
   const params = [];
 
   if (estado) {
@@ -63,61 +54,111 @@ const findAll = async (estado = null) => {
     params.push(estado);
   }
 
-  query += ` ORDER BY u.apellido, u.nombre ASC`;
+  query += ` ORDER BY p.apellidos, p.nombres ASC`;
 
   const [rows] = await pool.query(query, params);
   return rows;
 };
 
-const createUser = async ({ rolId, nombre, apellido, correo, passwordHash, telefono = null }) => {
-  const [result] = await pool.query(
-    `INSERT INTO usuarios
-      (rol_id, nombre, apellido, correo, password_hash, telefono, estado)
-    VALUES (?, ?, ?, ?, ?, ?, 'activo')`,
-    [rolId, nombre, apellido, correo, passwordHash, telefono]
-  );
+const createUser = async ({ rolId, nombre, apellido, correo, passwordHash, telefono = null, documento = null }) => {
+  const connection = await pool.getConnection();
 
-  return result.insertId;
+  try {
+    await connection.beginTransaction();
+
+    const [personaResult] = await connection.query(
+      `INSERT INTO personas (nombres, apellidos, documento, correo, telefono, estado)
+      VALUES (?, ?, ?, ?, ?, 'activo')`,
+      [nombre, apellido, documento || correo, correo, telefono]
+    );
+
+    const personaId = personaResult.insertId;
+
+    const [userResult] = await connection.query(
+      `INSERT INTO usuarios (persona_id, password_hash, estado)
+      VALUES (?, ?, 'activo')`,
+      [personaId, passwordHash]
+    );
+
+    await connection.query(
+      `INSERT INTO persona_roles (persona_id, rol_id, estado)
+      VALUES (?, ?, 'activo')`,
+      [personaId, rolId]
+    );
+
+    await connection.commit();
+    return userResult.insertId;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const updateUser = async (id, { nombre, apellido, telefono, estado }) => {
-  const updates = [];
-  const params = [];
+  const user = await findById(id);
+  if (!user) return false;
+
+  const personaUpdates = [];
+  const personaParams = [];
+  const userUpdates = [];
+  const userParams = [];
 
   if (nombre !== undefined) {
-    updates.push("nombre = ?");
-    params.push(nombre);
+    personaUpdates.push("nombres = ?");
+    personaParams.push(nombre);
   }
   if (apellido !== undefined) {
-    updates.push("apellido = ?");
-    params.push(apellido);
+    personaUpdates.push("apellidos = ?");
+    personaParams.push(apellido);
   }
   if (telefono !== undefined) {
-    updates.push("telefono = ?");
-    params.push(telefono);
+    personaUpdates.push("telefono = ?");
+    personaParams.push(telefono);
   }
   if (estado !== undefined) {
-    updates.push("estado = ?");
-    params.push(estado);
+    userUpdates.push("estado = ?");
+    userParams.push(estado);
   }
 
-  if (updates.length === 0) return null;
+  if (personaUpdates.length === 0 && userUpdates.length === 0) return null;
 
-  updates.push("updated_at = CURRENT_TIMESTAMP");
-  params.push(id);
+  const connection = await pool.getConnection();
 
-  const query = `UPDATE usuarios SET ${updates.join(", ")} WHERE id = ?`;
-  const [result] = await pool.query(query, params);
+  try {
+    await connection.beginTransaction();
 
-  return result.affectedRows > 0;
+    if (personaUpdates.length > 0) {
+      personaUpdates.push("updated_at = CURRENT_TIMESTAMP");
+      personaParams.push(user.persona_id);
+      await connection.query(
+        `UPDATE personas SET ${personaUpdates.join(", ")} WHERE id = ?`,
+        personaParams
+      );
+    }
+
+    if (userUpdates.length > 0) {
+      userUpdates.push("updated_at = CURRENT_TIMESTAMP");
+      userParams.push(id);
+      await connection.query(
+        `UPDATE usuarios SET ${userUpdates.join(", ")} WHERE id = ?`,
+        userParams
+      );
+    }
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const deleteUser = async (id) => {
-  const [result] = await pool.query(
-    `DELETE FROM usuarios WHERE id = ?`,
-    [id]
-  );
-
+  const [result] = await pool.query(`DELETE FROM usuarios WHERE id = ?`, [id]);
   return result.affectedRows > 0;
 };
 

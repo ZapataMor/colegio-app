@@ -10,14 +10,15 @@ const findById = async (id) => {
       m.estado,
       m.created_at,
       m.updated_at,
-      e.nombres AS estudiante_nombres,
-      e.apellidos AS estudiante_apellidos,
-      e.documento AS estudiante_documento,
+      p.nombres AS estudiante_nombres,
+      p.apellidos AS estudiante_apellidos,
+      p.documento AS estudiante_documento,
       c.nombre AS curso_nombre,
       c.nivel AS curso_nivel,
       c.jornada AS curso_jornada
     FROM matriculas m
     INNER JOIN estudiantes e ON e.id = m.estudiante_id
+    INNER JOIN personas p ON p.id = e.persona_id
     INNER JOIN cursos c ON c.id = m.curso_id
     WHERE m.id = ?
     LIMIT 1`,
@@ -36,14 +37,15 @@ const findAll = async (estado = null, anio = null, cursoId = null) => {
     m.estado,
     m.created_at,
     m.updated_at,
-    e.nombres AS estudiante_nombres,
-    e.apellidos AS estudiante_apellidos,
-    e.documento AS estudiante_documento,
+    p.nombres AS estudiante_nombres,
+    p.apellidos AS estudiante_apellidos,
+    p.documento AS estudiante_documento,
     c.nombre AS curso_nombre,
     c.nivel AS curso_nivel,
     c.jornada AS curso_jornada
   FROM matriculas m
   INNER JOIN estudiantes e ON e.id = m.estudiante_id
+  INNER JOIN personas p ON p.id = e.persona_id
   INNER JOIN cursos c ON c.id = m.curso_id`;
 
   const params = [];
@@ -68,7 +70,7 @@ const findAll = async (estado = null, anio = null, cursoId = null) => {
     query += ` WHERE ${conditions.join(" AND ")}`;
   }
 
-  query += ` ORDER BY m.anio DESC, e.apellidos ASC, e.nombres ASC`;
+  query += ` ORDER BY m.anio DESC, p.apellidos ASC, p.nombres ASC`;
 
   const [rows] = await pool.query(query, params);
   return rows;

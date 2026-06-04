@@ -1,57 +1,37 @@
 const pool = require("../config/db");
 
-const findById = async (id) => {
-  const [rows] = await pool.query(
-    `SELECT
-      e.id,
-      e.usuario_id,
-      e.curso_id,
-      e.nombres,
-      e.apellidos,
-      e.documento,
-      e.fecha_nacimiento,
-      e.genero,
-      e.direccion,
-      e.telefono_acudiente,
-      e.nombre_acudiente,
-      e.estado,
-      c.nombre AS curso_nombre,
-      c.nivel,
-      c.jornada,
-      e.created_at,
-      e.updated_at
-    FROM estudiantes e
-    LEFT JOIN cursos c ON c.id = e.curso_id
-    WHERE e.id = ?
-    LIMIT 1`,
-    [id]
-  );
+const baseSelect = `SELECT
+  e.id,
+  u.id AS usuario_id,
+  e.persona_id,
+  e.curso_id,
+  p.nombres,
+  p.apellidos,
+  p.documento,
+  p.fecha_nacimiento,
+  p.genero,
+  p.direccion,
+  p.telefono AS telefono_acudiente,
+  NULL AS nombre_acudiente,
+  e.codigo_estudiante,
+  e.estado,
+  c.nombre AS curso_nombre,
+  c.nivel,
+  c.jornada,
+  e.created_at,
+  e.updated_at
+FROM estudiantes e
+INNER JOIN personas p ON p.id = e.persona_id
+LEFT JOIN usuarios u ON u.persona_id = p.id
+LEFT JOIN cursos c ON c.id = e.curso_id`;
 
+const findById = async (id) => {
+  const [rows] = await pool.query(`${baseSelect} WHERE e.id = ? LIMIT 1`, [id]);
   return rows[0] || null;
 };
 
 const findAll = async (estado = null, cursoId = null) => {
-  let query = `SELECT
-    e.id,
-    e.usuario_id,
-    e.curso_id,
-    e.nombres,
-    e.apellidos,
-    e.documento,
-    e.fecha_nacimiento,
-    e.genero,
-    e.direccion,
-    e.telefono_acudiente,
-    e.nombre_acudiente,
-    e.estado,
-    c.nombre AS curso_nombre,
-    c.nivel,
-    c.jornada,
-    e.created_at,
-    e.updated_at
-  FROM estudiantes e
-  LEFT JOIN cursos c ON c.id = e.curso_id`;
-
+  let query = baseSelect;
   const params = [];
   const conditions = [];
 
@@ -69,7 +49,7 @@ const findAll = async (estado = null, cursoId = null) => {
     query += ` WHERE ${conditions.join(" AND ")}`;
   }
 
-  query += ` ORDER BY e.apellidos, e.nombres ASC`;
+  query += ` ORDER BY p.apellidos, p.nombres ASC`;
 
   const [rows] = await pool.query(query, params);
   return rows;
@@ -77,23 +57,22 @@ const findAll = async (estado = null, cursoId = null) => {
 
 const findByDocumento = async (documento) => {
   const [rows] = await pool.query(
-    `SELECT
-      e.id,
-      e.usuario_id,
-      e.curso_id,
-      e.nombres,
-      e.apellidos,
-      e.documento,
-      e.estado,
-      c.nombre AS curso_nombre
-    FROM estudiantes e
-    LEFT JOIN cursos c ON c.id = e.curso_id
-    WHERE e.documento = ?
-    LIMIT 1`,
+    `${baseSelect} WHERE p.documento = ? LIMIT 1`,
     [documento]
   );
 
   return rows[0] || null;
+};
+
+const ensureRole = async (connection, personaId, roleName) => {
+  const [roles] = await connection.query(`SELECT id FROM roles WHERE nombre = ? LIMIT 1`, [roleName]);
+  if (!roles[0]) return;
+
+  await connection.query(
+    `INSERT IGNORE INTO persona_roles (persona_id, rol_id, estado)
+    VALUES (?, ?, 'activo')`,
+    [personaId, roles[0].id]
+  );
 };
 
 const create = async (estudianteData) => {
@@ -107,61 +86,120 @@ const create = async (estudianteData) => {
     genero = null,
     direccion = null,
     telefonoAcudiente = null,
-    nombreAcudiente = null,
   } = estudianteData;
 
-  const [result] = await pool.query(
-    `INSERT INTO estudiantes
-      (usuario_id, curso_id, nombres, apellidos, documento, fecha_nacimiento, genero, direccion, telefono_acudiente, nombre_acudiente, estado)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'activo')`,
-    [usuarioId, cursoId, nombres, apellidos, documento, fechaNacimiento, genero, direccion, telefonoAcudiente, nombreAcudiente]
-  );
+  const connection = await pool.getConnection();
 
-  return result.insertId;
+  try {
+    await connection.beginTransaction();
+
+    let personaId = null;
+    if (usuarioId) {
+      const [users] = await connection.query(`SELECT persona_id FROM usuarios WHERE id = ? LIMIT 1`, [usuarioId]);
+      personaId = users[0]?.persona_id || null;
+    }
+
+    if (!personaId) {
+      const [personaResult] = await connection.query(
+        `INSERT INTO personas
+          (nombres, apellidos, documento, fecha_nacimiento, genero, direccion, telefono, estado)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'activo')`,
+        [nombres, apellidos, documento, fechaNacimiento, genero, direccion, telefonoAcudiente]
+      );
+      personaId = personaResult.insertId;
+    } else {
+      await connection.query(
+        `UPDATE personas
+        SET nombres = ?, apellidos = ?, documento = ?, fecha_nacimiento = ?, genero = ?, direccion = ?, telefono = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?`,
+        [nombres, apellidos, documento, fechaNacimiento, genero, direccion, telefonoAcudiente, personaId]
+      );
+    }
+
+    const [result] = await connection.query(
+      `INSERT INTO estudiantes (persona_id, curso_id, estado)
+      VALUES (?, ?, 'activo')`,
+      [personaId, cursoId]
+    );
+
+    await ensureRole(connection, personaId, "estudiante");
+    await connection.commit();
+    return result.insertId;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const update = async (id, estudianteData) => {
-  const updates = [];
-  const params = [];
+  const current = await findById(id);
+  if (!current) return false;
 
-  const fieldMap = {
-    usuarioId: "usuario_id",
-    cursoId: "curso_id",
+  const personaUpdates = [];
+  const personaParams = [];
+  const estudianteUpdates = [];
+  const estudianteParams = [];
+
+  const personaFieldMap = {
     nombres: "nombres",
     apellidos: "apellidos",
     documento: "documento",
     fechaNacimiento: "fecha_nacimiento",
     genero: "genero",
     direccion: "direccion",
-    telefonoAcudiente: "telefono_acudiente",
-    nombreAcudiente: "nombre_acudiente",
-    estado: "estado",
+    telefonoAcudiente: "telefono",
   };
 
-  for (const [key, dbField] of Object.entries(fieldMap)) {
+  for (const [key, dbField] of Object.entries(personaFieldMap)) {
     if (estudianteData[key] !== undefined) {
-      updates.push(`${dbField} = ?`);
-      params.push(estudianteData[key]);
+      personaUpdates.push(`${dbField} = ?`);
+      personaParams.push(estudianteData[key]);
     }
   }
 
-  if (updates.length === 0) return null;
+  if (estudianteData.cursoId !== undefined) {
+    estudianteUpdates.push("curso_id = ?");
+    estudianteParams.push(estudianteData.cursoId);
+  }
 
-  updates.push("updated_at = CURRENT_TIMESTAMP");
-  params.push(id);
+  if (estudianteData.estado !== undefined) {
+    estudianteUpdates.push("estado = ?");
+    estudianteParams.push(estudianteData.estado);
+  }
 
-  const query = `UPDATE estudiantes SET ${updates.join(", ")} WHERE id = ?`;
-  const [result] = await pool.query(query, params);
+  if (personaUpdates.length === 0 && estudianteUpdates.length === 0) return null;
 
-  return result.affectedRows > 0;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    if (personaUpdates.length > 0) {
+      personaUpdates.push("updated_at = CURRENT_TIMESTAMP");
+      personaParams.push(current.persona_id);
+      await connection.query(`UPDATE personas SET ${personaUpdates.join(", ")} WHERE id = ?`, personaParams);
+    }
+
+    if (estudianteUpdates.length > 0) {
+      estudianteUpdates.push("updated_at = CURRENT_TIMESTAMP");
+      estudianteParams.push(id);
+      await connection.query(`UPDATE estudiantes SET ${estudianteUpdates.join(", ")} WHERE id = ?`, estudianteParams);
+    }
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 };
 
 const deleteEstudiante = async (id) => {
-  const [result] = await pool.query(
-    `DELETE FROM estudiantes WHERE id = ?`,
-    [id]
-  );
-
+  const [result] = await pool.query(`DELETE FROM estudiantes WHERE id = ?`, [id]);
   return result.affectedRows > 0;
 };
 
