@@ -4,22 +4,22 @@ const { createToken } = require("../utils/jwt");
 
 const login = async (req, res, next) => {
   try {
-    const usuario = req.body.usuario?.trim();
+    const correo = req.body.correo?.trim().toLowerCase();
     const contrasena = req.body.contrasena?.trim();
 
-    if (!usuario || !contrasena) {
+    if (!correo || !contrasena) {
       return res.status(400).json({
-        message: "Usuario y contrasena son obligatorios.",
+        message: "Correo y contrasena son obligatorios.",
       });
     }
 
     // Busca el usuario y compara la contrasena enviada con el hash bcrypt guardado.
-    const user = await userModel.findByUsuario(usuario);
+    const user = await userModel.findByCorreo(correo);
     const isPasswordValid = user
-      ? await bcrypt.compare(contrasena, user.contrasena)
+      ? await bcrypt.compare(contrasena, user.password_hash)
       : false;
 
-    if (!user || !isPasswordValid) {
+    if (!user || user.estado !== "activo" || !isPasswordValid) {
       return res.status(401).json({
         message: "Credenciales incorrectas.",
       });
@@ -33,7 +33,9 @@ const login = async (req, res, next) => {
       token,
       user: {
         id: user.id,
-        usuario: user.usuario,
+        nombre: user.nombre,
+        apellido: user.apellido,
+        correo: user.correo,
         rol: user.rol,
       },
     });
