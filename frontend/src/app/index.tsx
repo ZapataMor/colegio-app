@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
-import { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,14 +18,6 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 type LoginState = 'idle' | 'loading' | 'success' | 'error';
 
-type UserSession = {
-  id: number;
-  nombre: string;
-  apellido: string;
-  correo: string;
-  rol: string;
-};
-
 function getApiUrl() {
   const hostUri = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoClient?.hostUri;
   const host = hostUri?.split(':')[0];
@@ -36,18 +29,51 @@ function getApiUrl() {
   return 'http://localhost:3001';
 }
 
+// Store global para mantener sesión en memoria
+let userSessionGlobal: any = null;
+
+export function setUserSession(session: any) {
+  userSessionGlobal = session;
+  // Guardar en localStorage para web
+  if (typeof window !== 'undefined') {
+    if (session) {
+      window.localStorage.setItem('userSession', JSON.stringify(session));
+    } else {
+      window.localStorage.removeItem('userSession');
+    }
+  }
+}
+
+export function getUserSession() {
+  // Intentar recuperar de localStorage primero
+  if (typeof window !== 'undefined' && !userSessionGlobal) {
+    const stored = window.localStorage.getItem('userSession');
+    if (stored) {
+      userSessionGlobal = JSON.parse(stored);
+    }
+  }
+  return userSessionGlobal;
+}
+
 export default function LoginScreen() {
+  const router = useRouter();
   const apiUrl = useMemo(() => getApiUrl(), []);
-  const [correo, setCorreo] = useState('');
-  const [contrasena, setContrasena] = useState('');
+  const [correo, setCorreo] = useState('admin@colegio.com');
+  const [contrasena, setContrasena] = useState('Admin123*');
   const [status, setStatus] = useState<LoginState>('idle');
   const [message, setMessage] = useState('');
-  const [session, setSession] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    // Verificar si ya hay sesión
+    const session = getUserSession();
+    if (session) {
+      router.replace('/(dashboard)/dashboard');
+    }
+  }, []);
 
   const iniciarSesion = async () => {
     setStatus('loading');
     setMessage('');
-    setSession(null);
 
     try {
       const response = await fetch(`${apiUrl}/login`, {
@@ -63,9 +89,19 @@ export default function LoginScreen() {
         throw new Error(data.message || 'No fue posible iniciar sesion.');
       }
 
-      setSession(data.user);
+      // Guardar sesión
+      setUserSession({
+        ...data.user,
+        token: data.token,
+      });
+
       setStatus('success');
       setMessage(data.message || 'Login exitoso.');
+
+      // Redirigir al dashboard después de 500ms
+      setTimeout(() => {
+        router.replace('/(dashboard)/dashboard');
+      }, 500);
     } catch (error) {
       setStatus('error');
       setMessage(error instanceof Error ? error.message : 'Error desconocido.');
@@ -146,23 +182,6 @@ export default function LoginScreen() {
                 API: {apiUrl}
               </ThemedText>
             </ThemedView>
-
-            {session ? (
-              <ThemedView type="backgroundElement" style={styles.sessionPanel}>
-                <ThemedText type="subtitle">
-                  Bienvenido, {session.nombre} {session.apellido}
-                </ThemedText>
-                <ThemedText>
-                  Correo: {session.correo}
-                </ThemedText>
-                <ThemedText>
-                  Rol: {session.rol}
-                </ThemedText>
-                <ThemedText type="small" style={styles.sessionHint}>
-                  Aqui se puede conectar el panel de {session.rol}.
-                </ThemedText>
-              </ThemedView>
-            ) : null}
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -248,13 +267,5 @@ const styles = StyleSheet.create({
   },
   apiText: {
     opacity: 0.68,
-  },
-  sessionPanel: {
-    borderRadius: Spacing.two,
-    gap: Spacing.one,
-    padding: Spacing.four,
-  },
-  sessionHint: {
-    opacity: 0.72,
   },
 });
