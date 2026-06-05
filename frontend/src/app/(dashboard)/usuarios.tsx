@@ -12,11 +12,16 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
+import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
+import UsersIcon from 'react-native-heroicons/outline/UsersIcon';
+import ShieldCheckIcon from 'react-native-heroicons/outline/ShieldCheckIcon';
 
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
 import { SearchBar } from '@/components/crud/SearchBar';
+import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
@@ -620,7 +625,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
-  helpText: { opacity: 0.65, marginBottom: Spacing.three, lineHeight: 20 },
+  helpText: { opacity: 0.65, marginBottom: Spacing.three, lineHeight: 20, color: '#A7B0C0' },
   statsRow: {
     flexDirection: 'row',
     gap: Spacing.three,
@@ -631,15 +636,17 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.two,
     gap: Spacing.one,
+    borderWidth: 1,
+    borderColor: '#232936',
   },
-  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '600' },
-  statValue: { fontSize: 28 },
-  statValueGreen: { color: '#16A34A' },
+  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', color: '#A7B0C0' },
+  statValue: { fontSize: 28, color: '#F5F4F0' },
+  statValueGreen: { color: '#22C55E' },
   filtersBlock: {
     marginBottom: Spacing.three,
     gap: Spacing.one,
   },
-  filterLabel: { fontWeight: '600', opacity: 0.7, marginLeft: Spacing.one },
+  filterLabel: { fontWeight: '700', opacity: 0.7, marginLeft: Spacing.one, color: '#D4D9E2' },
   filterLabelSpaced: { marginTop: Spacing.two },
   loader: { marginTop: Spacing.five },
   list: {
@@ -651,13 +658,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.three,
-    borderRadius: 12,
+    borderRadius: Spacing.three,
     gap: Spacing.three,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: '#232936',
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
       },
       default: {},
     }),
@@ -665,12 +672,12 @@ const styles = StyleSheet.create({
   avatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#2563EB',
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 179, 66, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: '#FFFFFF', fontWeight: '800', fontSize: 16 },
+  avatarText: { color: '#F5B342', fontWeight: '800', fontSize: 16 },
   cardBody: { flex: 1, gap: 4, minWidth: 0 },
   cardTitleRow: {
     flexDirection: 'row',
@@ -679,9 +686,9 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     flexWrap: 'wrap',
   },
-  cardName: { flexShrink: 1, fontSize: 16 },
-  cardEmail: { opacity: 0.85 },
-  cardMeta: { opacity: 0.55, fontSize: 12 },
+  cardName: { flexShrink: 1, fontSize: 16, color: '#F5F4F0' },
+  cardEmail: { opacity: 0.85, color: '#A7B0C0' },
+  cardMeta: { opacity: 0.55, fontSize: 12, color: '#A7B0C0' },
   rolesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   roleBadge: {
     paddingHorizontal: 8,
@@ -694,21 +701,24 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 12,
   },
-  statusActive: { backgroundColor: '#DCFCE7' },
-  statusInactive: { backgroundColor: '#FEE2E2' },
-  statusBlocked: { backgroundColor: '#FEF3C7' },
-  statusBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize', color: '#374151' },
+  statusActive: { backgroundColor: 'rgba(22,163,74,0.14)' },
+  statusInactive: { backgroundColor: 'rgba(220,38,38,0.14)' },
+  statusBlocked: { backgroundColor: 'rgba(217,119,6,0.14)' },
+  statusBadgeText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize', color: '#D4D9E2' },
   cardActions: { flexDirection: 'row', gap: Spacing.two },
   iconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#101827',
+    borderWidth: 1,
+    borderColor: '#2A3344',
   },
-  iconBtnEdit: { backgroundColor: '#EFF6FF' },
+  iconBtnEdit: {},
   iconBtnEditText: { fontSize: 18, color: '#2563EB' },
-  iconBtnDelete: { backgroundColor: '#FEF2F2' },
+  iconBtnDelete: {},
   iconBtnDeleteText: { fontSize: 16 },
   pressed: { opacity: 0.7 },
   emptyBox: {
@@ -716,8 +726,8 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     alignItems: 'center',
   },
-  emptyText: { textAlign: 'center', opacity: 0.6 },
-  errorText: { color: '#DC2626', textAlign: 'center', marginTop: Spacing.four },
+  emptyText: { textAlign: 'center', opacity: 0.6, color: '#A7B0C0' },
+  errorText: { color: '#F87171', textAlign: 'center', marginTop: Spacing.four },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -728,11 +738,13 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: MaxContentWidth,
     maxHeight: '92%',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     padding: Spacing.four,
+    borderWidth: 1,
+    borderColor: '#232936',
   },
-  modalTitle: { marginBottom: Spacing.three },
+  modalTitle: { marginBottom: Spacing.three, color: '#F5F4F0' },
   form: { gap: Spacing.three, paddingBottom: Spacing.four },
   sectionTitle: {
     fontWeight: '800',
@@ -753,24 +765,25 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingTop: Spacing.two,
     borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    borderTopColor: '#232936',
   },
   cancelBtn: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.three,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#2A3344',
+    backgroundColor: '#101827',
   },
-  cancelBtnText: { fontWeight: '600' },
+  cancelBtnText: { fontWeight: '700', color: '#D4D9E2' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.three,
-    borderRadius: 10,
-    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    backgroundColor: '#F5B342',
   },
   saveDisabled: { opacity: 0.45 },
-  saveBtnText: { color: '#FFFFFF', fontWeight: '700' },
+  saveBtnText: { color: '#101010', fontWeight: '800' },
 });
