@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ComponentType } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -6,21 +7,31 @@ import {
   Modal,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
+import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
+import ArrowLeftIcon from 'react-native-heroicons/outline/ArrowLeftIcon';
+import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
+import ClipboardDocumentListIcon from 'react-native-heroicons/outline/ClipboardDocumentListIcon';
+import FunnelIcon from 'react-native-heroicons/outline/FunnelIcon';
+import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
+import PlusIcon from 'react-native-heroicons/outline/PlusIcon';
+import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
+import UserIcon from 'react-native-heroicons/outline/UserIcon';
+import BuildingOffice2Icon from 'react-native-heroicons/outline/BuildingOffice2Icon';
 
 import { FormField } from '@/components/crud/FormField';
-import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
+import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { apiFetch } from '@/lib/api';
 
-type Curso = { id: number; nombre: string };
+type Curso = { id: number; nombre: string; nivel?: string; jornada?: string };
 type Estudiante = {
   id: number;
   nombres: string;
@@ -51,6 +62,7 @@ const emptyForm = {
 };
 
 export default function MatriculaScreen() {
+  const router = useRouter();
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -76,7 +88,7 @@ export default function MatriculaScreen() {
       setEstudiantes(estRes.data ?? []);
       setCursos(cursosRes.data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al cargar matrículas.');
+      setError(err instanceof Error ? err.message : 'Error al cargar matriculas.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -87,9 +99,18 @@ export default function MatriculaScreen() {
     loadData();
   }, [loadData]);
 
+  const metrics = useMemo(() => {
+    const activas = matriculas.filter((matricula) => matricula.estado === 'activa').length;
+    return {
+      total: matriculas.length,
+      activas,
+      cursos: cursos.length,
+    };
+  }, [matriculas, cursos.length]);
+
   const openCreate = () => {
     if (estudiantes.length === 0) {
-      Alert.alert('Sin estudiantes', 'Primero registra estudiantes en el módulo correspondiente.');
+      Alert.alert('Sin estudiantes', 'Primero registra estudiantes en el modulo correspondiente.');
       return;
     }
     setEditing(null);
@@ -102,20 +123,20 @@ export default function MatriculaScreen() {
     setModalVisible(true);
   };
 
-  const openEdit = (mat: Matricula) => {
-    setEditing(mat);
+  const openEdit = (matricula: Matricula) => {
+    setEditing(matricula);
     setForm({
-      estudianteId: String(mat.estudiante_id),
-      cursoId: String(mat.curso_id),
-      anio: String(mat.anio),
-      estado: mat.estado,
+      estudianteId: String(matricula.estudiante_id),
+      cursoId: String(matricula.curso_id),
+      anio: String(matricula.anio),
+      estado: matricula.estado,
     });
     setModalVisible(true);
   };
 
   const handleSave = async () => {
     if (!form.estudianteId || !form.cursoId || !form.anio.trim()) {
-      Alert.alert('Validación', 'Estudiante, curso y año son obligatorios.');
+      Alert.alert('Validacion', 'Estudiante, curso y ano son obligatorios.');
       return;
     }
 
@@ -142,10 +163,10 @@ export default function MatriculaScreen() {
     }
   };
 
-  const handleDelete = (mat: Matricula) => {
+  const handleDelete = (matricula: Matricula) => {
     Alert.alert(
-      'Eliminar matrícula',
-      `¿Eliminar matrícula de ${mat.estudiante_nombres} ${mat.estudiante_apellidos} (${mat.anio})?`,
+      'Eliminar matricula',
+      `¿Eliminar matricula de ${matricula.estudiante_nombres} ${matricula.estudiante_apellidos} (${matricula.anio})?`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -153,7 +174,7 @@ export default function MatriculaScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiFetch(`/api/matriculas/${mat.id}`, { method: 'DELETE' });
+              await apiFetch(`/api/matriculas/${matricula.id}`, { method: 'DELETE' });
               await loadData();
             } catch (err) {
               Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
@@ -171,12 +192,52 @@ export default function MatriculaScreen() {
   ];
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ModuleHeader title="Matrícula" onAdd={openCreate} />
+    <ScreenShell contentStyle={styles.shellContent}>
+      <View style={styles.hero}>
+        <View style={styles.heroGlowA} />
+        <View style={styles.heroGlowB} />
+        <View style={styles.heroTop}>
+          <Pressable style={styles.backButton} onPress={() => router.replace('/(dashboard)/dashboard')}>
+            <ArrowLeftIcon width={18} height={18} color="#F5F4F0" />
+          </Pressable>
+          <View style={styles.heroTitleBlock}>
+            <ThemedText type="small" style={styles.kicker}>
+              Matriculas
+            </ThemedText>
+            <ThemedText type="title" style={styles.heroTitle}>
+              Gestion academica
+            </ThemedText>
+            <ThemedText style={styles.heroSubtitle}>
+              Controla inscripciones, filtros y acciones clave desde una vista mas limpia.
+            </ThemedText>
+          </View>
+          <Pressable onPress={openCreate} style={styles.addButton}>
+            <PlusIcon width={16} height={16} color="#101010" />
+            <ThemedText style={styles.addButtonText}>Nueva</ThemedText>
+          </Pressable>
+        </View>
 
+        <View style={styles.metricsRow}>
+          <MetricCard icon={ClipboardDocumentListIcon} label="Matriculas" value={metrics.total} />
+          <MetricCard icon={AcademicCapIcon} label="Activas" value={metrics.activas} />
+          <MetricCard icon={BuildingOffice2Icon} label="Cursos" value={metrics.cursos} />
+        </View>
+      </View>
+
+      <ThemedView type="backgroundElement" style={styles.filterCard}>
+        <View style={styles.filterHeader}>
+          <View style={styles.filterTitle}>
+            <FunnelIcon width={16} height={16} color="#F5B342" />
+            <ThemedText type="subtitle" style={styles.filterLabel}>
+              Filtrar por ano
+            </ThemedText>
+          </View>
+          <ThemedText type="small" style={styles.filterHint}>
+            Vista rapida y responsive
+          </ThemedText>
+        </View>
         <OptionChips
-          label="Filtrar por año"
+          label=""
           options={aniosFiltro}
           value={filtroAnio}
           onChange={(anio) => {
@@ -184,187 +245,554 @@ export default function MatriculaScreen() {
             setFiltroAnio(anio);
           }}
         />
+      </ThemedView>
 
-        {loading ? (
-          <ActivityIndicator size="large" color="#2563EB" style={styles.loader} />
-        ) : error ? (
+      {loading ? (
+        <ActivityIndicator size="large" color="#F5B342" style={styles.loader} />
+      ) : error ? (
+        <ThemedView type="backgroundElement" style={styles.emptyState}>
           <ThemedText style={styles.errorText}>{error}</ThemedText>
-        ) : (
-          <FlatList
-            data={matriculas}
-            keyExtractor={(item) => String(item.id)}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={() => {
-                  setRefreshing(true);
-                  loadData();
-                }}
-              />
-            }
-            ListEmptyComponent={
-              <ThemedText style={styles.emptyText}>
-                No hay matrículas{filtroAnio ? ` para ${filtroAnio}` : ''}.
+        </ThemedView>
+      ) : (
+        <FlatList
+          data={matriculas}
+          keyExtractor={(item) => String(item.id)}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadData();
+              }}
+            />
+          }
+          ListEmptyComponent={
+            <ThemedView type="backgroundElement" style={styles.emptyState}>
+              <ThemedText type="subtitle" style={styles.emptyTitle}>
+                No hay matriculas
               </ThemedText>
-            }
-            renderItem={({ item }) => (
+              <ThemedText style={styles.emptyDescription}>
+                {filtroAnio ? `No se encontraron registros para ${filtroAnio}.` : 'Aun no hay registros.'}
+              </ThemedText>
+            </ThemedView>
+          }
+          renderItem={({ item }) => {
+            const estadoEsActivo = item.estado === 'activa';
+            return (
               <ThemedView type="backgroundElement" style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <ThemedText type="subtitle">
-                    {item.estudiante_nombres} {item.estudiante_apellidos}
-                  </ThemedText>
-                  <ThemedText
-                    type="small"
-                    style={item.estado === 'activa' ? styles.badgeActive : styles.badgeOther}>
-                    {item.estado}
-                  </ThemedText>
+                <View style={styles.cardTop}>
+                  <View style={styles.avatar}>
+                    <UserIcon width={20} height={20} color="#F5B342" />
+                  </View>
+                  <View style={styles.cardHeading}>
+                    <ThemedText type="subtitle" style={styles.cardName}>
+                      {item.estudiante_nombres} {item.estudiante_apellidos}
+                    </ThemedText>
+                    <ThemedText type="small" style={styles.cardMeta}>
+                      Documento {item.estudiante_documento}
+                    </ThemedText>
+                  </View>
+                  <View style={[styles.statusPill, estadoEsActivo ? styles.statusActive : styles.statusOther]}>
+                    <ThemedText style={[styles.statusText, estadoEsActivo ? styles.statusTextActive : styles.statusTextOther]}>
+                      {item.estado}
+                    </ThemedText>
+                  </View>
                 </View>
-                <ThemedText type="small">Año: {item.anio}</ThemedText>
-                <ThemedText type="small" style={styles.muted}>
-                  Curso: {item.curso_nombre} · {item.curso_jornada}
-                </ThemedText>
-                <ThemedText type="small" style={styles.muted}>
-                  Doc: {item.estudiante_documento}
-                </ThemedText>
+
+                <View style={styles.detailGrid}>
+                  <DetailChip
+                    icon={CalendarDaysIcon}
+                    label="Ano"
+                    value={String(item.anio)}
+                  />
+                  <DetailChip
+                    icon={BuildingOffice2Icon}
+                    label="Curso"
+                    value={`${item.curso_nombre} · ${item.curso_jornada}`}
+                  />
+                  <DetailChip
+                    icon={ClipboardDocumentListIcon}
+                    label="Nivel"
+                    value={item.curso_nivel}
+                  />
+                </View>
+
                 <View style={styles.actions}>
-                  <Pressable onPress={() => openEdit(item)} style={styles.editBtn}>
-                    <ThemedText style={styles.editBtnText}>Editar</ThemedText>
+                  <Pressable onPress={() => openEdit(item)} style={({ pressed }) => [styles.actionButton, styles.editButton, pressed && styles.pressed]}>
+                    <PencilSquareIcon width={16} height={16} color="#1D4ED8" />
+                    <ThemedText style={styles.editText}>Editar</ThemedText>
                   </Pressable>
-                  <Pressable onPress={() => handleDelete(item)} style={styles.deleteBtn}>
-                    <ThemedText style={styles.deleteBtnText}>Eliminar</ThemedText>
+                  <Pressable onPress={() => handleDelete(item)} style={({ pressed }) => [styles.actionButton, styles.deleteButton, pressed && styles.pressed]}>
+                    <TrashIcon width={16} height={16} color="#DC2626" />
+                    <ThemedText style={styles.deleteText}>Eliminar</ThemedText>
                   </Pressable>
                 </View>
               </ThemedView>
-            )}
-            contentContainerStyle={styles.list}
-          />
-        )}
+            );
+          }}
+          contentContainerStyle={styles.list}
+        />
+      )}
 
-        <Modal visible={modalVisible} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <ThemedView style={styles.modalContent}>
-              <ThemedText type="title" style={styles.modalTitle}>
-                {editing ? 'Editar matrícula' : 'Nueva matrícula'}
-              </ThemedText>
-              <ScrollView contentContainerStyle={styles.form}>
-                <OptionChips
-                  label="Estudiante"
-                  options={estudiantes.map((e) => ({
-                    value: String(e.id),
-                    label: `${e.apellidos} ${e.nombres}`,
-                  }))}
-                  value={form.estudianteId}
-                  onChange={(estudianteId) => setForm((f) => ({ ...f, estudianteId }))}
-                />
-                <OptionChips
-                  label="Curso"
-                  options={cursos.map((c) => ({
-                    value: String(c.id),
-                    label: c.nombre,
-                  }))}
-                  value={form.cursoId}
-                  onChange={(cursoId) => setForm((f) => ({ ...f, cursoId }))}
-                />
-                <FormField
-                  label="Año"
-                  value={form.anio}
-                  onChangeText={(anio) => setForm((f) => ({ ...f, anio }))}
-                  keyboardType="numeric"
-                  placeholder="2026"
-                />
-                {editing && (
-                  <OptionChips
-                    label="Estado"
-                    options={[
-                      { value: 'activa', label: 'Activa' },
-                      { value: 'cancelada', label: 'Cancelada' },
-                      { value: 'finalizada', label: 'Finalizada' },
-                    ]}
-                    value={form.estado}
-                    onChange={(estado) => setForm((f) => ({ ...f, estado }))}
-                  />
-                )}
-              </ScrollView>
-              <View style={styles.modalActions}>
-                <Pressable
-                  onPress={() => setModalVisible(false)}
-                  style={styles.cancelBtn}
-                  disabled={saving}>
-                  <ThemedText>Cancelar</ThemedText>
-                </Pressable>
-                <Pressable onPress={handleSave} style={styles.saveBtn} disabled={saving}>
-                  {saving ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <ThemedText style={styles.saveBtnText}>Guardar</ThemedText>
-                  )}
-                </Pressable>
+      <Modal visible={modalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <ThemedView style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <View style={styles.modalIcon}>
+                  <ClipboardDocumentListIcon width={18} height={18} color="#F5B342" />
+                </View>
+                <View>
+                  <ThemedText type="small" style={styles.kicker}>
+                    Matricula
+                  </ThemedText>
+                  <ThemedText type="title" style={styles.modalTitle}>
+                    {editing ? 'Editar matricula' : 'Nueva matricula'}
+                  </ThemedText>
+                </View>
               </View>
-            </ThemedView>
-          </View>
-        </Modal>
-      </SafeAreaView>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.form}>
+              <OptionChips
+                label="Estudiante"
+                options={estudiantes.map((e) => ({
+                  value: String(e.id),
+                  label: `${e.apellidos} ${e.nombres}`,
+                }))}
+                value={form.estudianteId}
+                onChange={(estudianteId) => setForm((f) => ({ ...f, estudianteId }))}
+              />
+              <OptionChips
+                label="Curso"
+                options={cursos.map((c) => ({
+                  value: String(c.id),
+                  label: c.nombre,
+                }))}
+                value={form.cursoId}
+                onChange={(cursoId) => setForm((f) => ({ ...f, cursoId }))}
+              />
+              <FormField
+                label="Ano"
+                value={form.anio}
+                onChangeText={(anio) => setForm((f) => ({ ...f, anio }))}
+                keyboardType="numeric"
+                placeholder="2026"
+              />
+              {editing ? (
+                <OptionChips
+                  label="Estado"
+                  options={[
+                    { value: 'activa', label: 'Activa' },
+                    { value: 'cancelada', label: 'Cancelada' },
+                    { value: 'finalizada', label: 'Finalizada' },
+                  ]}
+                  value={form.estado}
+                  onChange={(estado) => setForm((f) => ({ ...f, estado }))}
+                />
+              ) : null}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                onPress={() => setModalVisible(false)}
+                style={({ pressed }) => [styles.modalButton, styles.cancelBtn, pressed && styles.pressed]}
+                disabled={saving}>
+                <ThemedText style={styles.cancelBtnText}>Cancelar</ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={handleSave}
+                style={({ pressed }) => [styles.modalButton, styles.saveBtn, pressed && styles.pressed]}
+                disabled={saving}>
+                {saving ? (
+                  <ActivityIndicator color="#101010" />
+                ) : (
+                  <ThemedText style={styles.saveBtnText}>Guardar</ThemedText>
+                )}
+              </Pressable>
+            </View>
+          </ThemedView>
+        </View>
+      </Modal>
+    </ScreenShell>
+  );
+}
+
+type IconType = ComponentType<{ width?: number; height?: number; color?: string }>;
+
+function MetricCard({ icon: Icon, label, value }: { icon: IconType; label: string; value: number }) {
+  return (
+    <ThemedView type="backgroundElement" style={styles.metricCard}>
+      <View style={styles.metricIcon}>
+        <Icon width={18} height={18} color="#F5B342" />
+      </View>
+      <ThemedText type="small" style={styles.metricLabel}>
+        {label}
+      </ThemedText>
+      <ThemedText style={styles.metricValue}>{value}</ThemedText>
     </ThemedView>
   );
 }
 
+function DetailChip({ icon: Icon, label, value }: { icon: IconType; label: string; value: string }) {
+  return (
+    <View style={styles.detailChip}>
+      <View style={styles.detailIcon}>
+        <Icon width={14} height={14} color="#A7B0C0" />
+      </View>
+      <View style={styles.detailText}>
+        <ThemedText type="small" style={styles.detailLabel}>
+          {label}
+        </ThemedText>
+        <ThemedText style={styles.detailValue}>{value}</ThemedText>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: { flex: 1, paddingHorizontal: Spacing.four, paddingVertical: Spacing.three },
-  loader: { marginTop: Spacing.five },
-  list: { gap: Spacing.three, paddingBottom: Spacing.five, paddingTop: Spacing.three },
-  card: { padding: Spacing.three, borderRadius: Spacing.two, gap: Spacing.one },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  muted: { opacity: 0.65 },
-  badgeActive: { color: '#16A34A', fontWeight: '700' },
-  badgeOther: { color: '#D97706', fontWeight: '700' },
-  actions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
-  editBtn: {
+  shellContent: {
+    gap: Spacing.three,
+  },
+  hero: {
+    position: 'relative',
+    overflow: 'hidden',
+    padding: Spacing.four,
+    borderRadius: Spacing.three,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#232936',
+    gap: Spacing.three,
+  },
+  heroGlowA: {
+    position: 'absolute',
+    top: -70,
+    right: -30,
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    backgroundColor: '#F5B342',
+    opacity: 0.12,
+  },
+  heroGlowB: {
+    position: 'absolute',
+    bottom: -60,
+    left: -50,
+    width: 120,
+    height: 120,
+    borderRadius: 999,
+    backgroundColor: '#F5B342',
+    opacity: 0.08,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.three,
+    zIndex: 1,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  heroTitleBlock: {
     flex: 1,
-    backgroundColor: '#E0E7FF',
+    gap: 4,
+  },
+  kicker: {
+    color: '#F5B342',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    color: '#F5F4F0',
+  },
+  heroSubtitle: {
+    color: 'rgba(245, 244, 240, 0.72)',
+    lineHeight: 20,
+    maxWidth: 540,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F5B342',
     borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  addButtonText: {
+    color: '#101010',
+    fontWeight: '800',
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    zIndex: 1,
+  },
+  metricCard: {
+    flex: 1,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    gap: 4,
+  },
+  metricIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 179, 66, 0.12)',
+    marginBottom: 2,
+  },
+  metricLabel: {
+    color: '#A7B0C0',
+    fontWeight: '700',
+  },
+  metricValue: {
+    color: '#F5F4F0',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  filterCard: {
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    gap: Spacing.two,
+    borderWidth: 1,
+    borderColor: '#232936',
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  filterTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterLabel: {
+    color: '#F5F4F0',
+  },
+  filterHint: {
+    color: '#A7B0C0',
+  },
+  loader: {
+    marginTop: Spacing.five,
+  },
+  list: {
+    gap: Spacing.three,
+    paddingBottom: Spacing.six,
+  },
+  card: {
+    padding: Spacing.three,
+    borderRadius: Spacing.three,
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderColor: '#232936',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 24,
+    elevation: 2,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.two,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 179, 66, 0.12)',
+  },
+  cardHeading: {
+    flex: 1,
+    gap: 3,
+  },
+  cardName: {
+    color: '#F5F4F0',
+  },
+  cardMeta: {
+    color: '#A7B0C0',
+  },
+  statusPill: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 6,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusActive: {
+    backgroundColor: 'rgba(22, 163, 74, 0.14)',
+  },
+  statusOther: {
+    backgroundColor: 'rgba(217, 119, 6, 0.14)',
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  statusTextActive: {
+    color: '#22C55E',
+  },
+  statusTextOther: {
+    color: '#F59E0B',
+  },
+  detailGrid: {
+    gap: Spacing.two,
+  },
+  detailChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
     padding: Spacing.two,
+    borderRadius: Spacing.two,
+    backgroundColor: '#101827',
+    borderWidth: 1,
+    borderColor: '#2A3344',
+  },
+  detailIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(167, 176, 192, 0.08)',
+  },
+  detailText: {
+    flex: 1,
+    gap: 2,
+  },
+  detailLabel: {
+    color: '#A7B0C0',
+    fontWeight: '700',
+  },
+  detailValue: {
+    color: '#F5F4F0',
+    fontWeight: '600',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Spacing.three,
+    borderRadius: Spacing.two,
+  },
+  editButton: {
+    backgroundColor: 'rgba(37, 99, 235, 0.12)',
+  },
+  editText: {
+    color: '#60A5FA',
+    fontWeight: '800',
+  },
+  deleteButton: {
+    backgroundColor: 'rgba(220, 38, 38, 0.12)',
+  },
+  deleteText: {
+    color: '#F87171',
+    fontWeight: '800',
+  },
+  pressed: {
+    opacity: 0.82,
+  },
+  emptyState: {
+    padding: Spacing.four,
+    borderRadius: Spacing.three,
+    gap: Spacing.two,
     alignItems: 'center',
   },
-  editBtnText: { color: '#2563EB', fontWeight: '700' },
-  deleteBtn: {
-    flex: 1,
-    backgroundColor: '#FEE2E2',
-    borderRadius: Spacing.two,
-    padding: Spacing.two,
-    alignItems: 'center',
+  emptyTitle: {
+    color: '#F5F4F0',
   },
-  deleteBtnText: { color: '#DC2626', fontWeight: '700' },
-  emptyText: { textAlign: 'center', opacity: 0.6, marginTop: Spacing.five },
-  errorText: { color: '#DC2626', textAlign: 'center' },
+  emptyDescription: {
+    color: '#A7B0C0',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  errorText: {
+    color: '#F87171',
+    textAlign: 'center',
+    fontWeight: '700',
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalContent: {
-    maxHeight: '90%',
-    borderTopLeftRadius: Spacing.three,
-    borderTopRightRadius: Spacing.three,
+    width: '100%',
+    maxWidth: 900,
+    maxHeight: '92%',
     padding: Spacing.four,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    gap: Spacing.three,
   },
-  modalTitle: { marginBottom: Spacing.three },
-  form: { gap: Spacing.three, paddingBottom: Spacing.three },
-  modalActions: { flexDirection: 'row', gap: Spacing.two },
-  cancelBtn: {
+  modalHeader: {
+    paddingBottom: Spacing.two,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  modalIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(245, 179, 66, 0.12)',
+  },
+  modalTitle: {
+    color: '#F5F4F0',
+  },
+  form: {
+    gap: Spacing.three,
+    paddingBottom: Spacing.three,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  modalButton: {
     flex: 1,
     alignItems: 'center',
-    padding: Spacing.three,
+    justifyContent: 'center',
+    minHeight: 48,
     borderRadius: Spacing.two,
+  },
+  cancelBtn: {
+    backgroundColor: '#101827',
     borderWidth: 1,
-    borderColor: '#D1D5DB',
+    borderColor: '#2A3344',
+  },
+  cancelBtnText: {
+    color: '#D4D9E2',
+    fontWeight: '800',
   },
   saveBtn: {
-    flex: 1,
-    alignItems: 'center',
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#F5B342',
   },
-  saveBtnText: { color: '#FFFFFF', fontWeight: '700' },
+  saveBtnText: {
+    color: '#101010',
+    fontWeight: '900',
+  },
 });
