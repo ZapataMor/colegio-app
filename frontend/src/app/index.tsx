@@ -9,12 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getApiUrl } from '@/lib/api';
+import { ScreenShell } from '@/components/screen-shell';
 import { getUserSession, setUserSession } from '@/lib/session';
 
 export { getUserSession, setUserSession } from '@/lib/session';
@@ -75,22 +75,62 @@ export default function LoginScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardView}>
-          <View style={styles.content}>
-            <View style={styles.header}>
-              <ThemedText type="title" style={styles.title}>
-                Colegio App
-              </ThemedText>
-              <ThemedText style={styles.subtitle}>
-                Inicia sesion para entrar al panel segun tu rol.
-              </ThemedText>
+    <ScreenShell contentStyle={styles.shellContent}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardView}>
+          <View style={styles.shell}>
+            <View style={styles.heroPanel}>
+              <View style={styles.glowA} />
+              <View style={styles.glowB} />
+              <View style={styles.brandRow}>
+                <View style={styles.brandMark} />
+                <ThemedText style={styles.brandText}>Colegio App</ThemedText>
+              </View>
+              <View style={styles.heroCopy}>
+                <ThemedText type="small" style={styles.kicker}>
+                  Acceso seguro
+                </ThemedText>
+                <ThemedText type="title" style={styles.heroTitle}>
+                  Gestiona el colegio con una vista limpia y rapida.
+                </ThemedText>
+                <ThemedText style={styles.heroSubtitle}>
+                  Entra al panel segun tu rol, con una experiencia pensada para
+                  lectura rapida, contraste fuerte y menos friccion.
+                </ThemedText>
+              </View>
+              <View style={styles.statRow}>
+                <View style={styles.statItem}>
+                  <ThemedText style={styles.statValue}>24/7</ThemedText>
+                  <ThemedText type="small" style={styles.statLabel}>
+                    Acceso
+                  </ThemedText>
+                </View>
+                <View style={styles.statItem}>
+                  <ThemedText style={styles.statValue}>3 roles</ThemedText>
+                  <ThemedText type="small" style={styles.statLabel}>
+                    Inicio por perfil
+                  </ThemedText>
+                </View>
+                <View style={styles.statItem}>
+                  <ThemedText style={styles.statValue}>1 panel</ThemedText>
+                  <ThemedText type="small" style={styles.statLabel}>
+                    Todo conectado
+                  </ThemedText>
+                </View>
+              </View>
             </View>
 
             <ThemedView type="backgroundElement" style={styles.formPanel}>
+              <View style={styles.header}>
+                <ThemedText type="title" style={styles.title}>
+                  Iniciar sesion
+                </ThemedText>
+                <ThemedText style={styles.subtitle}>
+                  Usa tus credenciales para entrar al panel segun tu rol.
+                </ThemedText>
+              </View>
+
               <View style={styles.fieldGroup}>
                 <ThemedText type="small" style={styles.label}>
                   Correo
@@ -101,7 +141,7 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   onChangeText={setCorreo}
                   placeholder="admin@colegio.com"
-                  placeholderTextColor="#8E8E93"
+                  placeholderTextColor="#8C8C93"
                   style={styles.input}
                   value={correo}
                 />
@@ -114,7 +154,7 @@ export default function LoginScreen() {
                 <TextInput
                   onChangeText={setContrasena}
                   placeholder="Admin123*"
-                  placeholderTextColor="#8E8E93"
+                  placeholderTextColor="#8C8C93"
                   secureTextEntry
                   style={styles.input}
                   value={contrasena}
@@ -138,9 +178,9 @@ export default function LoginScreen() {
                   status === 'loading' && styles.buttonDisabled,
                 ]}>
                 {status === 'loading' ? (
-                  <ActivityIndicator color="#FFFFFF" />
+                  <ActivityIndicator color="#101010" />
                 ) : (
-                  <ThemedText style={styles.buttonText}>Iniciar sesion</ThemedText>
+                  <ThemedText style={styles.buttonText}>Entrar al panel</ThemedText>
                 )}
               </Pressable>
 
@@ -149,29 +189,112 @@ export default function LoginScreen() {
               </ThemedText>
             </ThemedView>
           </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </ThemedView>
+      </KeyboardAvoidingView>
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    maxWidth: MaxContentWidth,
-  },
   keyboardView: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  content: {
+  shellContent: {
+    justifyContent: 'center',
+    flexGrow: 1,
+  },
+  shell: {
+    width: '100%',
+    maxWidth: MaxContentWidth,
+    gap: Spacing.three,
+  },
+  heroPanel: {
+    overflow: 'hidden',
+    borderRadius: Spacing.three,
     gap: Spacing.three,
     padding: Spacing.four,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#232936',
+    minHeight: 240,
+  },
+  glowA: {
+    position: 'absolute',
+    top: -80,
+    left: -60,
+    width: 200,
+    height: 200,
+    borderRadius: 999,
+    backgroundColor: '#F5B342',
+    opacity: 0.18,
+  },
+  glowB: {
+    position: 'absolute',
+    right: -30,
+    bottom: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+    backgroundColor: '#F5B342',
+    opacity: 0.08,
+  },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    zIndex: 1,
+  },
+  brandMark: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#F5B342',
+  },
+  brandText: {
+    color: '#F5F4F0',
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  heroCopy: {
+    gap: Spacing.two,
+    zIndex: 1,
+  },
+  kicker: {
+    color: '#F5B342',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    color: '#F5F4F0',
+  },
+  heroSubtitle: {
+    color: 'rgba(245, 244, 240, 0.72)',
+    lineHeight: 22,
+  },
+  statRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    zIndex: 1,
+  },
+  statItem: {
+    flexGrow: 1,
+    minWidth: 92,
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  statValue: {
+    color: '#F5F4F0',
+    fontWeight: '700',
+  },
+  statLabel: {
+    color: 'rgba(245, 244, 240, 0.6)',
   },
   header: {
     gap: Spacing.two,
@@ -186,6 +309,13 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     gap: Spacing.three,
     padding: Spacing.four,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 12 },
+    shadowRadius: 24,
+    elevation: 4,
   },
   fieldGroup: {
     gap: Spacing.one,
@@ -196,7 +326,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#D1D5DB',
+    borderColor: '#D8DADF',
     borderRadius: Spacing.two,
     borderWidth: 1,
     color: '#111827',
@@ -206,7 +336,7 @@ const styles = StyleSheet.create({
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#2563EB',
+    backgroundColor: '#F5B342',
     borderRadius: Spacing.two,
     justifyContent: 'center',
     minHeight: 48,
@@ -214,13 +344,13 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
   },
   buttonPressed: {
-    opacity: 0.86,
+    opacity: 0.9,
   },
   buttonDisabled: {
     opacity: 0.7,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: '#101010',
     fontWeight: '700',
   },
   errorText: {
