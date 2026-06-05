@@ -3,6 +3,15 @@ import Constants from 'expo-constants';
 import { getUserSession } from '@/lib/session';
 
 export function getApiUrl() {
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/$/, '');
+  }
+
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return `${window.location.protocol}//${window.location.hostname}:3001`;
+  }
+
   const hostUri =
     Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoClient?.hostUri;
   const host = hostUri?.split(':')[0];
@@ -11,7 +20,7 @@ export function getApiUrl() {
     return `http://${host}:3001`;
   }
 
-  return 'http://localhost:3001';
+  return 'http://127.0.0.1:3001';
 }
 
 type ApiOptions = {
@@ -35,13 +44,19 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
     headers.Authorization = `Bearer ${session.token}`;
   }
 
-  const response = await fetch(`${getApiUrl()}${path}`, {
-    method: options.method ?? 'GET',
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  let response: Response;
 
-  const data = await response.json();
+  try {
+    response = await fetch(`${getApiUrl()}${path}`, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch {
+    throw new Error(`No se pudo conectar al backend en ${getApiUrl()}.`);
+  }
+
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(data.message || 'Error en la solicitud.');

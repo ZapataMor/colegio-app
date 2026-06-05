@@ -92,7 +92,7 @@ export default function DashboardScreen() {
                   style={({ pressed }) => [styles.moduloCard, pressed && styles.moduloCardPressed]}>
                   <ThemedView type="backgroundElement" style={styles.moduloContent}>
                     <View style={styles.moduloIconWrap}>
-                      <ThemedText style={styles.moduloIcono}>{item.icono}</ThemedText>
+                      <item.icon width={22} height={22} color="#F5B342" />
                     </View>
                     <View style={styles.moduloText}>
                       <ThemedText type="subtitle" style={styles.moduloNombre}>
@@ -102,7 +102,7 @@ export default function DashboardScreen() {
                         {item.descripcion}
                       </ThemedText>
                     </View>
-                    <ThemedText style={styles.moduloArrow}>-&gt;</ThemedText>
+                    <ThemedText style={styles.moduloArrow}>→</ThemedText>
                   </ThemedView>
                 </Pressable>
               )}

@@ -21,7 +21,10 @@ export function OptionChips({ label, options, value, onChange }: OptionChipsProp
       <ThemedText type="small" style={styles.label}>
         {label}
       </ThemedText>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.row}>
         {options.map((option) => {
           const selected = option.value === value;
 
@@ -55,22 +58,22 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 20,
+    borderColor: '#2A3344',
+    borderRadius: 999,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.one,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#101827',
   },
   chipSelected: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: '#F5B342',
+    borderColor: '#F5B342',
   },
   chipText: {
     fontSize: 13,
-    color: '#374151',
+    color: '#D4D9E2',
   },
   chipTextSelected: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+    color: '#101010',
+    fontWeight: '800',
   },
 });

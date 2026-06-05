@@ -1,4 +1,5 @@
 import { StyleSheet, TextInput, View } from 'react-native';
+import MagnifyingGlassIcon from 'react-native-heroicons/outline/MagnifyingGlassIcon';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -16,16 +17,17 @@ export function SearchBar({
 }: SearchBarProps) {
   return (
     <View style={styles.wrap}>
-      <ThemedText style={styles.icon}>🔍</ThemedText>
+      <MagnifyingGlassIcon width={18} height={18} color="#A7B0C0" />
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
+        placeholderTextColor="#8C95A5"
         style={styles.input}
         value={value}
       />
+      <ThemedText style={styles.shortcut}>⌘K</ThemedText>
     </View>
   );
 }
@@ -34,19 +36,23 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#101827',
     borderRadius: Spacing.two,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#293244',
     paddingHorizontal: Spacing.three,
-    minHeight: 46,
+    minHeight: 48,
     gap: Spacing.two,
   },
-  icon: { fontSize: 16, opacity: 0.5 },
   input: {
     flex: 1,
-    color: '#111827',
+    color: '#F5F4F0',
     fontSize: 15,
     paddingVertical: Spacing.two,
+  },
+  shortcut: {
+    color: '#A7B0C0',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

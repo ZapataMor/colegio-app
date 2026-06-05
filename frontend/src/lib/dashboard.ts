@@ -1,8 +1,11 @@
+import type { CrudIcon } from '@/components/crud/crud-icons';
+import { CrudIcons } from '@/components/crud/crud-icons';
+
 export type Modulo = {
   id: string;
   nombre: string;
   descripcion: string;
-  icono: string;
+  icon: CrudIcon;
   ruta: string;
 };
 
@@ -11,35 +14,35 @@ export const MODULOS_ADMIN: Modulo[] = [
     id: 'matricula',
     nombre: 'Matrícula',
     descripcion: 'Gestión de matrículas de estudiantes',
-    icono: '📋',
+    icon: CrudIcons.list,
     ruta: '/(dashboard)/matricula',
   },
   {
     id: 'estudiantes',
     nombre: 'Estudiantes',
     descripcion: 'Lista y gestión de estudiantes',
-    icono: '👨‍🎓',
+    icon: CrudIcons.student,
     ruta: '/(dashboard)/estudiantes',
   },
   {
     id: 'profesores',
     nombre: 'Profesores',
     descripcion: 'Gestión de profesores y docentes',
-    icono: '👨‍🏫',
+    icon: CrudIcons.academicCap,
     ruta: '/(dashboard)/profesores',
   },
   {
     id: 'usuarios',
     nombre: 'Usuarios',
     descripcion: 'Accesos al sistema por persona',
-    icono: '👥',
+    icon: CrudIcons.users,
     ruta: '/(dashboard)/usuarios',
   },
   {
     id: 'salones',
     nombre: 'Salones',
     descripcion: 'Gestión de salones y aulas',
-    icono: '🏫',
+    icon: CrudIcons.building,
     ruta: '/(dashboard)/salones',
   },
 ];

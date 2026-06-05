@@ -49,7 +49,7 @@ export default function LoginScreen() {
         },
         body: JSON.stringify({ correo, contrasena }),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(data.message || 'No fue posible iniciar sesion.');
@@ -70,7 +70,9 @@ export default function LoginScreen() {
       }, 500);
     } catch (error) {
       setStatus('error');
-      setMessage(error instanceof Error ? error.message : 'Error desconocido.');
+      setMessage(
+        error instanceof Error ? error.message : `No se pudo conectar a ${apiUrl}.`
+      );
     }
   };
 
@@ -99,26 +101,7 @@ export default function LoginScreen() {
                   lectura rapida, contraste fuerte y menos friccion.
                 </ThemedText>
               </View>
-              <View style={styles.statRow}>
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statValue}>24/7</ThemedText>
-                  <ThemedText type="small" style={styles.statLabel}>
-                    Acceso
-                  </ThemedText>
-                </View>
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statValue}>3 roles</ThemedText>
-                  <ThemedText type="small" style={styles.statLabel}>
-                    Inicio por perfil
-                  </ThemedText>
-                </View>
-                <View style={styles.statItem}>
-                  <ThemedText style={styles.statValue}>1 panel</ThemedText>
-                  <ThemedText type="small" style={styles.statLabel}>
-                    Todo conectado
-                  </ThemedText>
-                </View>
-              </View>
+              
             </View>
 
             <ThemedView type="backgroundElement" style={styles.formPanel}>

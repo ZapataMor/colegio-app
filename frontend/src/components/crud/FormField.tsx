@@ -33,7 +33,7 @@ export function FormField({
         keyboardType={keyboardType}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#8E8E93"
+        placeholderTextColor="#8C8C93"
         secureTextEntry={secureTextEntry}
         style={styles.input}
         value={value}
@@ -51,12 +51,12 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D1D5DB',
+    backgroundColor: '#101827',
+    borderColor: '#293244',
     borderRadius: Spacing.two,
     borderWidth: 1,
-    color: '#111827',
-    minHeight: 44,
+    color: '#F5F4F0',
+    minHeight: 48,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
