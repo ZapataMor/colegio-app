@@ -12,22 +12,22 @@ export type Modulo = {
 export const MODULOS_ADMIN: Modulo[] = [
   {
     id: 'matricula',
-    nombre: 'Matrícula',
-    descripcion: 'Gestión de matrículas de estudiantes',
+    nombre: 'Matricula',
+    descripcion: 'Gestion de matriculas de estudiantes',
     icon: CrudIcons.list,
     ruta: '/(dashboard)/matricula',
   },
   {
     id: 'estudiantes',
     nombre: 'Estudiantes',
-    descripcion: 'Lista y gestión de estudiantes',
+    descripcion: 'Lista y gestion de estudiantes',
     icon: CrudIcons.student,
     ruta: '/(dashboard)/estudiantes',
   },
   {
     id: 'profesores',
     nombre: 'Profesores',
-    descripcion: 'Gestión de profesores y docentes',
+    descripcion: 'Gestion de profesores y docentes',
     icon: CrudIcons.academicCap,
     ruta: '/(dashboard)/profesores',
   },
@@ -41,28 +41,59 @@ export const MODULOS_ADMIN: Modulo[] = [
   {
     id: 'salones',
     nombre: 'Salones',
-    descripcion: 'Gestión de salones y aulas',
+    descripcion: 'Gestion de salones y aulas',
     icon: CrudIcons.building,
     ruta: '/(dashboard)/salones',
   },
 ];
 
+export const MODULOS_PROFESOR: Modulo[] = [
+  {
+    id: 'horarios',
+    nombre: 'Gestionar horarios',
+    descripcion: 'Consulta y organiza tus clases asignadas.',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'asistencia',
+    nombre: 'Registrar asistencia',
+    descripcion: 'Marca asistencia por curso, asignatura y fecha.',
+    icon: CrudIcons.users,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'notas',
+    nombre: 'Registrar notas',
+    descripcion: 'Registra calificaciones de estudiantes por periodo.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'actividades',
+    nombre: 'Gestionar actividades',
+    descripcion: 'Crea y administra actividades academicas.',
+    icon: CrudIcons.academicCap,
+    ruta: '/(dashboard)/dashboard',
+  },
+];
+
 export const WELCOME_BY_ROLE: Record<string, { titulo: string; subtitulo: string }> = {
   administrador: {
-    titulo: 'Panel de administración',
-    subtitulo: 'Gestiona matrículas, personas, usuarios y recursos del colegio.',
+    titulo: 'Panel de administracion',
+    subtitulo: 'Gestiona matriculas, personas, usuarios y recursos del colegio.',
   },
   profesor: {
-    titulo: 'Hola, docente',
-    subtitulo: 'Tu espacio docente estará disponible muy pronto.',
+    titulo: 'Panel docente',
+    subtitulo: 'Gestiona horarios, asistencia, notas y actividades de tus cursos.',
   },
   estudiante: {
     titulo: 'Hola, estudiante',
-    subtitulo: 'Pronto podrás consultar tus notas y asistencias aquí.',
+    subtitulo: 'Pronto podras consultar tus notas y asistencias aqui.',
   },
   acudiente: {
     titulo: 'Hola, acudiente',
-    subtitulo: 'Pronto podrás ver el avance académico de tus acudidos.',
+    subtitulo: 'Pronto podras ver el avance academico de tus acudidos.',
   },
 };
 
@@ -73,11 +104,21 @@ export function getWelcomeForRole(rol: string, nombre: string) {
   };
 
   return {
-    titulo: rol === 'administrador' ? config.titulo : `${config.titulo}, ${nombre}`,
+    titulo: rol === 'administrador' || rol === 'profesor' ? config.titulo : `${config.titulo}, ${nombre}`,
     subtitulo: config.subtitulo,
   };
 }
 
 export function isAdmin(rol: string) {
   return rol === 'administrador';
+}
+
+export function isProfessor(rol: string) {
+  return rol === 'profesor';
+}
+
+export function getModulesForRole(rol: string) {
+  if (isAdmin(rol)) return MODULOS_ADMIN;
+  if (isProfessor(rol)) return MODULOS_PROFESOR;
+  return [];
 }

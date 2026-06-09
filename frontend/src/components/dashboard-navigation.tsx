@@ -13,7 +13,7 @@ import ArrowRightOnRectangleIcon from 'react-native-heroicons/outline/ArrowRight
 import Bars3Icon from 'react-native-heroicons/outline/Bars3Icon';
 
 import { ThemedText } from '@/components/themed-text';
-import { MODULOS_ADMIN } from '@/lib/dashboard';
+import { getModulesForRole } from '@/lib/dashboard';
 import { getUserSession, setUserSession } from '@/lib/session';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -33,7 +33,8 @@ export function DashboardNavigation() {
   const [menuOpen, setMenuOpen] = useState(false);
   const session = useMemo(() => getUserSession(), []);
   const theme = useTheme();
-  const items = [HOME_ITEM, ...MODULOS_ADMIN];
+  const roleModules = session ? getModulesForRole(session.rol) : [];
+  const items = [HOME_ITEM, ...roleModules];
 
   const handleLogout = () => {
     setUserSession(null);

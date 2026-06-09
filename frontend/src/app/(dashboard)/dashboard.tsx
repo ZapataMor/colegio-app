@@ -7,7 +7,7 @@ import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
-import { MODULOS_ADMIN, getWelcomeForRole, isAdmin } from '@/lib/dashboard';
+import { getModulesForRole, getWelcomeForRole, isAdmin, isProfessor } from '@/lib/dashboard';
 import { getUserSession, setUserSession, type UserSession } from '@/lib/session';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -44,6 +44,9 @@ export default function DashboardScreen() {
 
   const welcome = getWelcomeForRole(session.rol, session.nombre);
   const admin = isAdmin(session.rol);
+  const professor = isProfessor(session.rol);
+  const modules = getModulesForRole(session.rol);
+  const sectionTitle = professor ? 'Opciones del docente' : 'Modulos disponibles';
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
@@ -87,13 +90,13 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {admin ? (
+        {admin || professor ? (
           <View style={styles.modulesWrap}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
-              Modulos disponibles
+              {sectionTitle}
             </ThemedText>
             <FlatList
-              data={MODULOS_ADMIN}
+              data={modules}
               keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
                 <Pressable
