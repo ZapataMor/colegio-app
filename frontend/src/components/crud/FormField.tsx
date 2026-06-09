@@ -2,6 +2,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 type FormFieldProps = {
   label: string;
@@ -22,9 +23,11 @@ export function FormField({
   keyboardType = 'default',
   autoCapitalize = 'sentences',
 }: FormFieldProps) {
+  const theme = useTheme();
+
   return (
     <View style={styles.field}>
-      <ThemedText type="small" style={styles.label}>
+      <ThemedText type="small" style={[styles.label, { color: theme.textSecondary }]}>
         {label}
       </ThemedText>
       <TextInput
@@ -33,9 +36,16 @@ export function FormField({
         keyboardType={keyboardType}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#8C8C93"
+        placeholderTextColor={theme.textSecondary}
         secureTextEntry={secureTextEntry}
-        style={styles.input}
+        style={[
+          styles.input,
+          {
+            backgroundColor: theme.surfaceMuted,
+            borderColor: theme.border,
+            color: theme.text,
+          },
+        ]}
         value={value}
       />
     </View>
@@ -51,11 +61,8 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   input: {
-    backgroundColor: '#101827',
-    borderColor: '#293244',
     borderRadius: Spacing.two,
     borderWidth: 1,
-    color: '#F5F4F0',
     minHeight: 48,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,

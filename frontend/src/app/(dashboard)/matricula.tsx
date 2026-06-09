@@ -23,12 +23,14 @@ import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 import UserIcon from 'react-native-heroicons/outline/UserIcon';
 import BuildingOffice2Icon from 'react-native-heroicons/outline/BuildingOffice2Icon';
 
+import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { OptionChips } from '@/components/crud/OptionChips';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
 
 type Curso = { id: number; nombre: string; nivel?: string; jornada?: string };
@@ -63,6 +65,7 @@ const emptyForm = {
 
 export default function MatriculaScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
@@ -193,27 +196,29 @@ export default function MatriculaScreen() {
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
-      <View style={styles.hero}>
+      <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
         <View style={styles.heroGlowA} />
         <View style={styles.heroGlowB} />
         <View style={styles.heroTop}>
-          <Pressable style={styles.backButton} onPress={() => router.replace('/(dashboard)/dashboard')}>
-            <ArrowLeftIcon width={18} height={18} color="#F5F4F0" />
+          <Pressable
+            style={[styles.backButton, { backgroundColor: theme.surfaceMuted }]}
+            onPress={() => router.replace('/(dashboard)/dashboard')}>
+            <ArrowLeftIcon width={18} height={18} color={theme.text} />
           </Pressable>
           <View style={styles.heroTitleBlock}>
-            <ThemedText type="small" style={styles.kicker}>
+            <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
               Matriculas
             </ThemedText>
-            <ThemedText type="title" style={styles.heroTitle}>
+            <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
               Gestion academica
             </ThemedText>
-            <ThemedText style={styles.heroSubtitle}>
+            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
               Controla inscripciones, filtros y acciones clave desde una vista mas limpia.
             </ThemedText>
           </View>
-          <Pressable onPress={openCreate} style={styles.addButton}>
-            <PlusIcon width={16} height={16} color="#101010" />
-            <ThemedText style={styles.addButtonText}>Nueva</ThemedText>
+          <Pressable onPress={openCreate} style={[styles.addButton, { backgroundColor: theme.primary }]}>
+            <PlusIcon width={16} height={16} color={theme.primaryText} />
+            <ThemedText style={[styles.addButtonText, { color: theme.primaryText }]}>Nueva</ThemedText>
           </Pressable>
         </View>
 
@@ -224,15 +229,15 @@ export default function MatriculaScreen() {
         </View>
       </View>
 
-      <ThemedView type="backgroundElement" style={styles.filterCard}>
+      <ThemedView type="backgroundElement" style={[styles.filterCard, { borderColor: theme.border }]}>
         <View style={styles.filterHeader}>
           <View style={styles.filterTitle}>
-            <FunnelIcon width={16} height={16} color="#F5B342" />
-            <ThemedText type="subtitle" style={styles.filterLabel}>
+            <FunnelIcon width={16} height={16} color={theme.primary} />
+            <ThemedText type="subtitle" style={[styles.filterLabel, { color: theme.text }]}>
               Filtrar por ano
             </ThemedText>
           </View>
-          <ThemedText type="small" style={styles.filterHint}>
+          <ThemedText type="small" style={[styles.filterHint, { color: theme.textSecondary }]}>
             Vista rapida y responsive
           </ThemedText>
         </View>
@@ -248,11 +253,15 @@ export default function MatriculaScreen() {
       </ThemedView>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#F5B342" style={styles.loader} />
+        <SkeletonList />
       ) : error ? (
-        <ThemedView type="backgroundElement" style={styles.emptyState}>
-          <ThemedText style={styles.errorText}>{error}</ThemedText>
-        </ThemedView>
+        <ErrorState
+          message={error}
+          onRetry={() => {
+            setLoading(true);
+            loadData();
+          }}
+        />
       ) : (
         <FlatList
           data={matriculas}
@@ -279,16 +288,16 @@ export default function MatriculaScreen() {
           renderItem={({ item }) => {
             const estadoEsActivo = item.estado === 'activa';
             return (
-              <ThemedView type="backgroundElement" style={styles.card}>
+              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
                 <View style={styles.cardTop}>
-                  <View style={styles.avatar}>
-                    <UserIcon width={20} height={20} color="#F5B342" />
+                  <View style={[styles.avatar, { backgroundColor: `${theme.primary}24` }]}>
+                    <UserIcon width={20} height={20} color={theme.primary} />
                   </View>
                   <View style={styles.cardHeading}>
-                    <ThemedText type="subtitle" style={styles.cardName}>
+                    <ThemedText type="subtitle" style={[styles.cardName, { color: theme.text }]}>
                       {item.estudiante_nombres} {item.estudiante_apellidos}
                     </ThemedText>
-                    <ThemedText type="small" style={styles.cardMeta}>
+                    <ThemedText type="small" style={[styles.cardMeta, { color: theme.textSecondary }]}>
                       Documento {item.estudiante_documento}
                     </ThemedText>
                   </View>
@@ -319,12 +328,12 @@ export default function MatriculaScreen() {
 
                 <View style={styles.actions}>
                   <Pressable onPress={() => openEdit(item)} style={({ pressed }) => [styles.actionButton, styles.editButton, pressed && styles.pressed]}>
-                    <PencilSquareIcon width={16} height={16} color="#1D4ED8" />
-                    <ThemedText style={styles.editText}>Editar</ThemedText>
+                    <PencilSquareIcon width={16} height={16} color={theme.primary} />
+                    <ThemedText style={[styles.editText, { color: theme.primary }]}>Editar</ThemedText>
                   </Pressable>
                   <Pressable onPress={() => handleDelete(item)} style={({ pressed }) => [styles.actionButton, styles.deleteButton, pressed && styles.pressed]}>
-                    <TrashIcon width={16} height={16} color="#DC2626" />
-                    <ThemedText style={styles.deleteText}>Eliminar</ThemedText>
+                    <TrashIcon width={16} height={16} color={theme.danger} />
+                    <ThemedText style={[styles.deleteText, { color: theme.danger }]}>Eliminar</ThemedText>
                   </Pressable>
                 </View>
               </ThemedView>
@@ -336,17 +345,17 @@ export default function MatriculaScreen() {
 
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <ThemedView style={styles.modalContent}>
+          <ThemedView style={[styles.modalContent, { borderColor: theme.border }]}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleRow}>
-                <View style={styles.modalIcon}>
-                  <ClipboardDocumentListIcon width={18} height={18} color="#F5B342" />
+                <View style={[styles.modalIcon, { backgroundColor: `${theme.primary}24` }]}>
+                  <ClipboardDocumentListIcon width={18} height={18} color={theme.primary} />
                 </View>
                 <View>
-                  <ThemedText type="small" style={styles.kicker}>
+                  <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
                     Matricula
                   </ThemedText>
-                  <ThemedText type="title" style={styles.modalTitle}>
+                  <ThemedText type="title" style={[styles.modalTitle, { color: theme.text }]}>
                     {editing ? 'Editar matricula' : 'Nueva matricula'}
                   </ThemedText>
                 </View>
@@ -396,18 +405,28 @@ export default function MatriculaScreen() {
             <View style={styles.modalActions}>
               <Pressable
                 onPress={() => setModalVisible(false)}
-                style={({ pressed }) => [styles.modalButton, styles.cancelBtn, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.cancelBtn,
+                  { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                  pressed && styles.pressed,
+                ]}
                 disabled={saving}>
-                <ThemedText style={styles.cancelBtnText}>Cancelar</ThemedText>
+                <ThemedText style={[styles.cancelBtnText, { color: theme.text }]}>Cancelar</ThemedText>
               </Pressable>
               <Pressable
                 onPress={handleSave}
-                style={({ pressed }) => [styles.modalButton, styles.saveBtn, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.modalButton,
+                  styles.saveBtn,
+                  { backgroundColor: theme.primary },
+                  pressed && styles.pressed,
+                ]}
                 disabled={saving}>
                 {saving ? (
-                  <ActivityIndicator color="#101010" />
+                  <ActivityIndicator color={theme.primaryText} />
                 ) : (
-                  <ThemedText style={styles.saveBtnText}>Guardar</ThemedText>
+                  <ThemedText style={[styles.saveBtnText, { color: theme.primaryText }]}>Guardar</ThemedText>
                 )}
               </Pressable>
             </View>
@@ -421,30 +440,34 @@ export default function MatriculaScreen() {
 type IconType = ComponentType<{ width?: number; height?: number; color?: string }>;
 
 function MetricCard({ icon: Icon, label, value }: { icon: IconType; label: string; value: number }) {
+  const theme = useTheme();
+
   return (
     <ThemedView type="backgroundElement" style={styles.metricCard}>
-      <View style={styles.metricIcon}>
-        <Icon width={18} height={18} color="#F5B342" />
+      <View style={[styles.metricIcon, { backgroundColor: `${theme.primary}24` }]}>
+        <Icon width={18} height={18} color={theme.primary} />
       </View>
-      <ThemedText type="small" style={styles.metricLabel}>
+      <ThemedText type="small" style={[styles.metricLabel, { color: theme.textSecondary }]}>
         {label}
       </ThemedText>
-      <ThemedText style={styles.metricValue}>{value}</ThemedText>
+      <ThemedText style={[styles.metricValue, { color: theme.text }]}>{value}</ThemedText>
     </ThemedView>
   );
 }
 
 function DetailChip({ icon: Icon, label, value }: { icon: IconType; label: string; value: string }) {
+  const theme = useTheme();
+
   return (
-    <View style={styles.detailChip}>
-      <View style={styles.detailIcon}>
-        <Icon width={14} height={14} color="#A7B0C0" />
+    <View style={[styles.detailChip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+      <View style={[styles.detailIcon, { backgroundColor: `${theme.primary}1F` }]}>
+        <Icon width={14} height={14} color={theme.textSecondary} />
       </View>
       <View style={styles.detailText}>
-        <ThemedText type="small" style={styles.detailLabel}>
+        <ThemedText type="small" style={[styles.detailLabel, { color: theme.textSecondary }]}>
           {label}
         </ThemedText>
-        <ThemedText style={styles.detailValue}>{value}</ThemedText>
+        <ThemedText style={[styles.detailValue, { color: theme.text }]}>{value}</ThemedText>
       </View>
     </View>
   );
@@ -459,9 +482,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     padding: Spacing.four,
     borderRadius: Spacing.three,
-    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: '#232936',
     gap: Spacing.three,
   },
   heroGlowA: {
@@ -471,7 +492,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.12,
   },
   heroGlowB: {
@@ -481,7 +502,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.08,
   },
   heroTop: {
@@ -496,23 +517,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   heroTitleBlock: {
     flex: 1,
     gap: 4,
   },
   kicker: {
-    color: '#F5B342',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
   heroTitle: {
-    color: '#F5F4F0',
   },
   heroSubtitle: {
-    color: 'rgba(245, 244, 240, 0.72)',
     lineHeight: 20,
     maxWidth: 540,
   },
@@ -520,13 +537,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#F5B342',
     borderRadius: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
   addButtonText: {
-    color: '#101010',
     fontWeight: '800',
   },
   metricsRow: {
@@ -546,15 +561,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245, 179, 66, 0.12)',
     marginBottom: 2,
   },
   metricLabel: {
-    color: '#A7B0C0',
     fontWeight: '700',
   },
   metricValue: {
-    color: '#F5F4F0',
     fontSize: 20,
     fontWeight: '800',
   },
@@ -563,7 +575,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.two,
     borderWidth: 1,
-    borderColor: '#232936',
   },
   filterHeader: {
     flexDirection: 'row',
@@ -577,14 +588,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   filterLabel: {
-    color: '#F5F4F0',
   },
-  filterHint: {
-    color: '#A7B0C0',
-  },
-  loader: {
-    marginTop: Spacing.five,
-  },
+  filterHint: {},
   list: {
     gap: Spacing.three,
     paddingBottom: Spacing.six,
@@ -594,7 +599,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.three,
     borderWidth: 1,
-    borderColor: '#232936',
     shadowColor: '#000',
     shadowOpacity: 0.12,
     shadowOffset: { width: 0, height: 10 },
@@ -612,18 +616,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245, 179, 66, 0.12)',
   },
   cardHeading: {
     flex: 1,
     gap: 3,
   },
   cardName: {
-    color: '#F5F4F0',
   },
-  cardMeta: {
-    color: '#A7B0C0',
-  },
+  cardMeta: {},
   statusPill: {
     paddingHorizontal: Spacing.two,
     paddingVertical: 6,
@@ -657,9 +657,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     padding: Spacing.two,
     borderRadius: Spacing.two,
-    backgroundColor: '#101827',
     borderWidth: 1,
-    borderColor: '#2A3344',
   },
   detailIcon: {
     width: 28,
@@ -667,18 +665,15 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(167, 176, 192, 0.08)',
   },
   detailText: {
     flex: 1,
     gap: 2,
   },
   detailLabel: {
-    color: '#A7B0C0',
     fontWeight: '700',
   },
   detailValue: {
-    color: '#F5F4F0',
     fontWeight: '600',
   },
   actions: {
@@ -698,14 +693,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(37, 99, 235, 0.12)',
   },
   editText: {
-    color: '#60A5FA',
     fontWeight: '800',
   },
   deleteButton: {
     backgroundColor: 'rgba(220, 38, 38, 0.12)',
   },
   deleteText: {
-    color: '#F87171',
     fontWeight: '800',
   },
   pressed: {
@@ -718,17 +711,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyTitle: {
-    color: '#F5F4F0',
   },
   emptyDescription: {
-    color: '#A7B0C0',
     textAlign: 'center',
     lineHeight: 22,
-  },
-  errorText: {
-    color: '#F87171',
-    textAlign: 'center',
-    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
@@ -759,10 +745,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245, 179, 66, 0.12)',
   },
   modalTitle: {
-    color: '#F5F4F0',
   },
   form: {
     gap: Spacing.three,
@@ -780,19 +764,13 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
   },
   cancelBtn: {
-    backgroundColor: '#101827',
     borderWidth: 1,
-    borderColor: '#2A3344',
   },
   cancelBtnText: {
-    color: '#D4D9E2',
     fontWeight: '800',
   },
-  saveBtn: {
-    backgroundColor: '#F5B342',
-  },
+  saveBtn: {},
   saveBtnText: {
-    color: '#101010',
     fontWeight: '900',
   },
 });

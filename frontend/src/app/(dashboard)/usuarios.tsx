@@ -17,6 +17,7 @@ import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 import UsersIcon from 'react-native-heroicons/outline/UsersIcon';
 import ShieldCheckIcon from 'react-native-heroicons/outline/ShieldCheckIcon';
 
+import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
@@ -26,6 +27,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { apiFetch } from '@/lib/api';
+import { useTheme } from '@/hooks/use-theme';
 
 type Rol = { id: number; nombre: string };
 type PersonaDisponible = {
@@ -136,6 +138,7 @@ function StatusBadge({ estado }: { estado: string }) {
 }
 
 export default function UsuariosScreen() {
+  const theme = useTheme();
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [personas, setPersonas] = useState<PersonaDisponible[]>([]);
@@ -336,24 +339,24 @@ export default function UsuariosScreen() {
       .filter(Boolean);
 
     return (
-      <ThemedView type="backgroundElement" style={styles.card}>
-        <View style={styles.avatar}>
-          <ThemedText style={styles.avatarText}>
+      <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
+        <View style={[styles.avatar, { backgroundColor: `${theme.primary}24` }]}>
+          <ThemedText style={[styles.avatarText, { color: theme.primaryText }]}>
             {getInitials(item.nombres, item.apellidos)}
           </ThemedText>
         </View>
 
         <View style={styles.cardBody}>
           <View style={styles.cardTitleRow}>
-            <ThemedText type="subtitle" style={styles.cardName}>
+            <ThemedText type="subtitle" style={[styles.cardName, { color: theme.text }]}>
               {item.nombres} {item.apellidos}
             </ThemedText>
             <StatusBadge estado={item.estado} />
           </View>
-          <ThemedText type="small" style={styles.cardEmail}>
+          <ThemedText type="small" style={[styles.cardEmail, { color: theme.textSecondary }]}>
             {item.correo}
           </ThemedText>
-          <ThemedText type="small" style={styles.cardMeta}>
+          <ThemedText type="small" style={[styles.cardMeta, { color: theme.textSecondary }]}>
             {item.tipo_documento ?? 'CC'} {item.documento}
             {item.telefono ? ` · ${item.telefono}` : ''}
           </ThemedText>
@@ -367,13 +370,21 @@ export default function UsuariosScreen() {
         <View style={styles.cardActions}>
           <Pressable
             onPress={() => openEdit(item)}
-            style={({ pressed }) => [styles.iconBtn, styles.iconBtnEdit, pressed && styles.pressed]}>
-            <ThemedText style={styles.iconBtnEditText}>✎</ThemedText>
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+              pressed && styles.pressed,
+            ]}>
+            <PencilSquareIcon width={18} height={18} color={theme.primary} />
           </Pressable>
           <Pressable
             onPress={() => handleDelete(item)}
-            style={({ pressed }) => [styles.iconBtn, styles.iconBtnDelete, pressed && styles.pressed]}>
-            <ThemedText style={styles.iconBtnDeleteText}>🗑</ThemedText>
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+              pressed && styles.pressed,
+            ]}>
+            <TrashIcon width={18} height={18} color={theme.danger} />
           </Pressable>
         </View>
       </ThemedView>
@@ -386,24 +397,24 @@ export default function UsuariosScreen() {
         <View style={styles.page}>
           <ModuleHeader title="Usuarios" onAdd={openCreate} addLabel="+ Acceso" />
 
-          <ThemedText type="small" style={styles.helpText}>
+          <ThemedText type="small" style={[styles.helpText, { color: theme.textSecondary }]}>
             Administra accesos al sistema. Cada usuario está vinculado a una persona registrada.
           </ThemedText>
 
           <View style={styles.statsRow}>
-            <ThemedView type="backgroundElement" style={styles.statCard}>
-              <ThemedText type="small" style={styles.statLabel}>
+            <ThemedView type="backgroundElement" style={[styles.statCard, { borderColor: theme.border }]}>
+              <ThemedText type="small" style={[styles.statLabel, { color: theme.textSecondary }]}>
                 Total
               </ThemedText>
-              <ThemedText type="title" style={styles.statValue}>
+              <ThemedText type="title" style={[styles.statValue, { color: theme.text }]}>
                 {stats.total}
               </ThemedText>
             </ThemedView>
-            <ThemedView type="backgroundElement" style={styles.statCard}>
-              <ThemedText type="small" style={styles.statLabel}>
+            <ThemedView type="backgroundElement" style={[styles.statCard, { borderColor: theme.border }]}>
+              <ThemedText type="small" style={[styles.statLabel, { color: theme.textSecondary }]}>
                 Activos
               </ThemedText>
-              <ThemedText type="title" style={[styles.statValue, styles.statValueGreen]}>
+              <ThemedText type="title" style={[styles.statValue, { color: theme.accent }]}>
                 {stats.activos}
               </ThemedText>
             </ThemedView>
@@ -412,7 +423,7 @@ export default function UsuariosScreen() {
           <SearchBar value={busqueda} onChangeText={setBusqueda} />
 
           <View style={styles.filtersBlock}>
-            <ThemedText type="small" style={styles.filterLabel}>
+            <ThemedText type="small" style={[styles.filterLabel, { color: theme.textSecondary }]}>
               Estado
             </ThemedText>
             <OptionChips
@@ -421,16 +432,24 @@ export default function UsuariosScreen() {
               value={filtroEstado}
               onChange={setFiltroEstado}
             />
-            <ThemedText type="small" style={[styles.filterLabel, styles.filterLabelSpaced]}>
+            <ThemedText
+              type="small"
+              style={[styles.filterLabel, styles.filterLabelSpaced, { color: theme.textSecondary }]}>
               Rol
             </ThemedText>
             <OptionChips label="" options={FILTRO_ROL} value={filtroRol} onChange={setFiltroRol} />
           </View>
 
           {loading ? (
-            <ActivityIndicator size="large" color="#2563EB" style={styles.loader} />
+            <SkeletonList variant="compact" />
           ) : error ? (
-            <ThemedText style={styles.errorText}>{error}</ThemedText>
+            <ErrorState
+              message={error}
+              onRetry={() => {
+                setLoading(true);
+                loadUsuarios();
+              }}
+            />
           ) : (
             <FlatList
               data={usuarios}
@@ -460,8 +479,8 @@ export default function UsuariosScreen() {
 
         <Modal visible={modalVisible} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
-            <ThemedView style={styles.modalContent}>
-              <ThemedText type="title" style={styles.modalTitle}>
+            <ThemedView style={[styles.modalContent, { borderColor: theme.border }]}>
+              <ThemedText type="title" style={[styles.modalTitle, { color: theme.text }]}>
                 {editing ? 'Editar usuario' : 'Nuevo acceso'}
               </ThemedText>
 
@@ -555,7 +574,7 @@ export default function UsuariosScreen() {
                       }
                     />
                     {loadingPersonas ? (
-                      <ActivityIndicator color="#2563EB" />
+                      <ActivityIndicator color={theme.primary} />
                     ) : personas.length === 0 ? (
                       <ThemedView type="backgroundElement" style={styles.noPersonas}>
                         <ThemedText type="small" style={styles.hint}>
@@ -588,21 +607,22 @@ export default function UsuariosScreen() {
               <View style={styles.modalActions}>
                 <Pressable
                   onPress={() => setModalVisible(false)}
-                  style={styles.cancelBtn}
+                  style={[styles.cancelBtn, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
                   disabled={saving}>
-                  <ThemedText style={styles.cancelBtnText}>Cancelar</ThemedText>
+                  <ThemedText style={[styles.cancelBtnText, { color: theme.text }]}>Cancelar</ThemedText>
                 </Pressable>
                 <Pressable
                   onPress={handleSave}
                   style={[
                     styles.saveBtn,
+                    { backgroundColor: theme.primary },
                     !editing && (!createForm.personaId || personas.length === 0) && styles.saveDisabled,
                   ]}
                   disabled={saving || (!editing && (!createForm.personaId || personas.length === 0))}>
                   {saving ? (
-                    <ActivityIndicator color="#FFF" />
+                    <ActivityIndicator color={theme.primaryText} />
                   ) : (
-                    <ThemedText style={styles.saveBtnText}>Guardar</ThemedText>
+                    <ThemedText style={[styles.saveBtnText, { color: theme.primaryText }]}>Guardar</ThemedText>
                   )}
                 </Pressable>
               </View>
@@ -625,7 +645,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingVertical: Spacing.three,
   },
-  helpText: { opacity: 0.65, marginBottom: Spacing.three, lineHeight: 20, color: '#A7B0C0' },
+  helpText: { opacity: 0.65, marginBottom: Spacing.three, lineHeight: 20 },
   statsRow: {
     flexDirection: 'row',
     gap: Spacing.three,
@@ -637,18 +657,16 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     gap: Spacing.one,
     borderWidth: 1,
-    borderColor: '#232936',
   },
-  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '700', color: '#A7B0C0' },
-  statValue: { fontSize: 28, color: '#F5F4F0' },
+  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '700' },
+  statValue: { fontSize: 28 },
   statValueGreen: { color: '#22C55E' },
   filtersBlock: {
     marginBottom: Spacing.three,
     gap: Spacing.one,
   },
-  filterLabel: { fontWeight: '700', opacity: 0.7, marginLeft: Spacing.one, color: '#D4D9E2' },
+  filterLabel: { fontWeight: '700', opacity: 0.7, marginLeft: Spacing.one },
   filterLabelSpaced: { marginTop: Spacing.two },
-  loader: { marginTop: Spacing.five },
   list: {
     gap: Spacing.three,
     paddingBottom: Spacing.six,
@@ -661,7 +679,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.three,
     borderWidth: 1,
-    borderColor: '#232936',
     ...Platform.select({
       web: {
         boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
@@ -673,11 +690,10 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 16,
-    backgroundColor: 'rgba(245, 179, 66, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { color: '#F5B342', fontWeight: '800', fontSize: 16 },
+  avatarText: { fontWeight: '800', fontSize: 16 },
   cardBody: { flex: 1, gap: 4, minWidth: 0 },
   cardTitleRow: {
     flexDirection: 'row',
@@ -686,9 +702,9 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     flexWrap: 'wrap',
   },
-  cardName: { flexShrink: 1, fontSize: 16, color: '#F5F4F0' },
-  cardEmail: { opacity: 0.85, color: '#A7B0C0' },
-  cardMeta: { opacity: 0.55, fontSize: 12, color: '#A7B0C0' },
+  cardName: { flexShrink: 1, fontSize: 16 },
+  cardEmail: { opacity: 0.85 },
+  cardMeta: { opacity: 0.55, fontSize: 12 },
   rolesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
   roleBadge: {
     paddingHorizontal: 8,
@@ -704,7 +720,7 @@ const styles = StyleSheet.create({
   statusActive: { backgroundColor: 'rgba(22,163,74,0.14)' },
   statusInactive: { backgroundColor: 'rgba(220,38,38,0.14)' },
   statusBlocked: { backgroundColor: 'rgba(217,119,6,0.14)' },
-  statusBadgeText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize', color: '#D4D9E2' },
+  statusBadgeText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
   cardActions: { flexDirection: 'row', gap: Spacing.two },
   iconBtn: {
     width: 40,
@@ -712,12 +728,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#101827',
     borderWidth: 1,
-    borderColor: '#2A3344',
   },
   iconBtnEdit: {},
-  iconBtnEditText: { fontSize: 18, color: '#2563EB' },
+  iconBtnEditText: { fontSize: 18, color: '#79D0F2' },
   iconBtnDelete: {},
   iconBtnDeleteText: { fontSize: 16 },
   pressed: { opacity: 0.7 },
@@ -726,8 +740,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     alignItems: 'center',
   },
-  emptyText: { textAlign: 'center', opacity: 0.6, color: '#A7B0C0' },
-  errorText: { color: '#F87171', textAlign: 'center', marginTop: Spacing.four },
+  emptyText: { textAlign: 'center', opacity: 0.6 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -742,9 +755,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: '#232936',
   },
-  modalTitle: { marginBottom: Spacing.three, color: '#F5F4F0' },
+  modalTitle: { marginBottom: Spacing.three },
   form: { gap: Spacing.three, paddingBottom: Spacing.four },
   sectionTitle: {
     fontWeight: '800',
@@ -765,7 +777,7 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingTop: Spacing.two,
     borderTopWidth: 1,
-    borderTopColor: '#232936',
+    borderTopColor: 'rgba(121, 208, 242, 0.22)',
   },
   cancelBtn: {
     flex: 1,
@@ -773,17 +785,14 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#2A3344',
-    backgroundColor: '#101827',
   },
-  cancelBtnText: { fontWeight: '700', color: '#D4D9E2' },
+  cancelBtnText: { fontWeight: '700' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: Spacing.three,
     borderRadius: 12,
-    backgroundColor: '#F5B342',
   },
   saveDisabled: { opacity: 0.45 },
-  saveBtnText: { color: '#101010', fontWeight: '800' },
+  saveBtnText: { fontWeight: '800' },
 });

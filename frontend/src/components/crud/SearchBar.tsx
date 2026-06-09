@@ -3,6 +3,7 @@ import MagnifyingGlassIcon from 'react-native-heroicons/outline/MagnifyingGlassI
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 type SearchBarProps = {
   value: string;
@@ -15,19 +16,25 @@ export function SearchBar({
   onChangeText,
   placeholder = 'Buscar por nombre, correo o documento...',
 }: SearchBarProps) {
+  const theme = useTheme();
+
   return (
-    <View style={styles.wrap}>
-      <MagnifyingGlassIcon width={18} height={18} color="#A7B0C0" />
+    <View
+      style={[
+        styles.wrap,
+        { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+      ]}>
+      <MagnifyingGlassIcon width={18} height={18} color={theme.textSecondary} />
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#8C95A5"
-        style={styles.input}
+        placeholderTextColor={theme.textSecondary}
+        style={[styles.input, { color: theme.text }]}
         value={value}
       />
-      <ThemedText style={styles.shortcut}>⌘K</ThemedText>
+      <ThemedText style={[styles.shortcut, { color: theme.textSecondary }]}>⌘K</ThemedText>
     </View>
   );
 }
@@ -36,22 +43,18 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#101827',
     borderRadius: Spacing.two,
     borderWidth: 1,
-    borderColor: '#293244',
     paddingHorizontal: Spacing.three,
     minHeight: 48,
     gap: Spacing.two,
   },
   input: {
     flex: 1,
-    color: '#F5F4F0',
     fontSize: 15,
     paddingVertical: Spacing.two,
   },
   shortcut: {
-    color: '#A7B0C0',
     fontSize: 11,
     fontWeight: '700',
   },

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +17,7 @@ import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { getApiUrl } from '@/lib/api';
 import { ScreenShell } from '@/components/screen-shell';
 import { getUserSession, setUserSession } from '@/lib/session';
+import { useTheme } from '@/hooks/use-theme';
 
 export { getUserSession, setUserSession } from '@/lib/session';
 
@@ -23,6 +25,7 @@ type LoginState = 'idle' | 'loading' | 'success' | 'error';
 
 export default function LoginScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const apiUrl = useMemo(() => getApiUrl(), []);
   const [correo, setCorreo] = useState('admin@colegio.com');
   const [contrasena, setContrasena] = useState('Admin123*');
@@ -82,21 +85,26 @@ export default function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}>
           <View style={styles.shell}>
-            <View style={styles.heroPanel}>
+            <View style={[styles.heroPanel, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
               <View style={styles.glowA} />
               <View style={styles.glowB} />
               <View style={styles.brandRow}>
-                <View style={styles.brandMark} />
-                <ThemedText style={styles.brandText}>Colegio App</ThemedText>
+                <Image
+                  source={require('@/assets/images/escudo-inmaculada.jpg')}
+                  style={[styles.brandMark, { borderColor: theme.primary }]}
+                />
+                <ThemedText style={[styles.brandText, { color: theme.text }]}>
+                  Institucion Educativa #2 Inmaculada
+                </ThemedText>
               </View>
               <View style={styles.heroCopy}>
-                <ThemedText type="small" style={styles.kicker}>
+                <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
                   Acceso seguro
                 </ThemedText>
-                <ThemedText type="title" style={styles.heroTitle}>
+                <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
                   Gestiona el colegio con una vista limpia y rapida.
                 </ThemedText>
-                <ThemedText style={styles.heroSubtitle}>
+                <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
                   Entra al panel segun tu rol, con una experiencia pensada para
                   lectura rapida, contraste fuerte y menos friccion.
                 </ThemedText>
@@ -104,18 +112,18 @@ export default function LoginScreen() {
               
             </View>
 
-            <ThemedView type="backgroundElement" style={styles.formPanel}>
+            <ThemedView type="backgroundElement" style={[styles.formPanel, { borderColor: theme.border }]}>
               <View style={styles.header}>
                 <ThemedText type="title" style={styles.title}>
                   Iniciar sesion
                 </ThemedText>
-                <ThemedText style={styles.subtitle}>
+                <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
                   Usa tus credenciales para entrar al panel segun tu rol.
                 </ThemedText>
               </View>
 
               <View style={styles.fieldGroup}>
-                <ThemedText type="small" style={styles.label}>
+                <ThemedText type="small" style={[styles.label, { color: theme.textSecondary }]}>
                   Correo
                 </ThemedText>
                 <TextInput
@@ -124,22 +132,36 @@ export default function LoginScreen() {
                   autoCorrect={false}
                   onChangeText={setCorreo}
                   placeholder="admin@colegio.com"
-                  placeholderTextColor="#8C8C93"
-                  style={styles.input}
+                  placeholderTextColor={theme.textSecondary}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.surfaceMuted,
+                      borderColor: theme.border,
+                      color: theme.text,
+                    },
+                  ]}
                   value={correo}
                 />
               </View>
 
               <View style={styles.fieldGroup}>
-                <ThemedText type="small" style={styles.label}>
+                <ThemedText type="small" style={[styles.label, { color: theme.textSecondary }]}>
                   Contrasena
                 </ThemedText>
                 <TextInput
                   onChangeText={setContrasena}
                   placeholder="Admin123*"
-                  placeholderTextColor="#8C8C93"
+                  placeholderTextColor={theme.textSecondary}
                   secureTextEntry
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: theme.surfaceMuted,
+                      borderColor: theme.border,
+                      color: theme.text,
+                    },
+                  ]}
                   value={contrasena}
                 />
               </View>
@@ -147,7 +169,10 @@ export default function LoginScreen() {
               {message ? (
                 <ThemedText
                   type="small"
-                  style={status === 'error' ? styles.errorText : styles.successText}>
+                  style={[
+                    status === 'error' ? styles.errorText : styles.successText,
+                    { color: status === 'error' ? theme.danger : theme.accent },
+                  ]}>
                   {message}
                 </ThemedText>
               ) : null}
@@ -157,17 +182,18 @@ export default function LoginScreen() {
                 onPress={iniciarSesion}
                 style={({ pressed }) => [
                   styles.button,
+                  { backgroundColor: theme.primary },
                   pressed && styles.buttonPressed,
                   status === 'loading' && styles.buttonDisabled,
                 ]}>
                 {status === 'loading' ? (
-                  <ActivityIndicator color="#101010" />
+                  <ActivityIndicator color={theme.primaryText} />
                 ) : (
-                  <ThemedText style={styles.buttonText}>Entrar al panel</ThemedText>
+                  <ThemedText style={[styles.buttonText, { color: theme.primaryText }]}>Entrar al panel</ThemedText>
                 )}
               </Pressable>
 
-              <ThemedText type="small" style={styles.apiText}>
+              <ThemedText type="small" style={[styles.apiText, { color: theme.textSecondary }]}>
                 API: {apiUrl}
               </ThemedText>
             </ThemedView>
@@ -197,9 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.three,
     gap: Spacing.three,
     padding: Spacing.four,
-    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: '#232936',
     minHeight: 240,
   },
   glowA: {
@@ -209,7 +233,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 200,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.18,
   },
   glowB: {
@@ -219,7 +243,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.08,
   },
   brandRow: {
@@ -229,13 +253,12 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   brandMark: {
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: '#F5B342',
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 2,
   },
   brandText: {
-    color: '#F5F4F0',
     fontWeight: '700',
     letterSpacing: 0.4,
   },
@@ -244,16 +267,13 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   kicker: {
-    color: '#F5B342',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
   heroTitle: {
-    color: '#F5F4F0',
   },
   heroSubtitle: {
-    color: 'rgba(245, 244, 240, 0.72)',
     lineHeight: 22,
   },
   statRow: {
@@ -273,7 +293,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.06)',
   },
   statValue: {
-    color: '#F5F4F0',
     fontWeight: '700',
   },
   statLabel: {
@@ -293,7 +312,6 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
     shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 12 },
@@ -308,18 +326,14 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   input: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D8DADF',
     borderRadius: Spacing.two,
     borderWidth: 1,
-    color: '#111827',
     minHeight: 48,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
   },
   button: {
     alignItems: 'center',
-    backgroundColor: '#F5B342',
     borderRadius: Spacing.two,
     justifyContent: 'center',
     minHeight: 48,
@@ -333,15 +347,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: '#101010',
     fontWeight: '700',
   },
   errorText: {
-    color: '#DC2626',
     fontWeight: '700',
   },
   successText: {
-    color: '#16A34A',
     fontWeight: '700',
   },
   apiText: {

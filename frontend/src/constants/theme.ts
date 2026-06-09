@@ -7,20 +7,49 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+export const BrandPalette = {
+  primary: '#79D0F2',
+  white: '#FFFFFF',
+  green: '#8FBF26',
+  yellow: '#F2E635',
+  cream: '#F2EDA7',
+  coral: '#F25C5C',
+  ink: '#0A1626',
+  midnight: '#07111F',
+} as const;
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#0A1626',
+    background: '#F7FCFF',
+    backgroundElement: '#FFFFFF',
+    backgroundSelected: '#DDF4FC',
+    textSecondary: '#526173',
+    border: '#CAE9F5',
+    primary: BrandPalette.primary,
+    primaryText: '#073047',
+    accent: BrandPalette.green,
+    warning: BrandPalette.yellow,
+    softAccent: BrandPalette.cream,
+    danger: BrandPalette.coral,
+    navBackground: '#EAF8FD',
+    surfaceMuted: '#F0FAFE',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#FFFFFF',
+    background: '#030B14',
+    backgroundElement: '#0D1A2B',
+    backgroundSelected: '#16314A',
+    textSecondary: '#B8C9D6',
+    border: '#1D3A52',
+    primary: BrandPalette.primary,
+    primaryText: '#03121C',
+    accent: BrandPalette.green,
+    warning: BrandPalette.yellow,
+    softAccent: '#3B3A24',
+    danger: BrandPalette.coral,
+    navBackground: '#07111F',
+    surfaceMuted: '#102235',
   },
 } as const;
 

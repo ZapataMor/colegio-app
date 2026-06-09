@@ -16,6 +16,7 @@ import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
 import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
 
+import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
@@ -23,6 +24,7 @@ import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
 
 type IconType = ComponentType<{ width?: number; height?: number; color?: string }>;
@@ -53,6 +55,7 @@ const emptyForm = {
 };
 
 export default function EstudiantesScreen() {
+  const theme = useTheme();
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,21 +168,21 @@ export default function EstudiantesScreen() {
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
-      <View style={styles.hero}>
+      <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
         <View style={styles.heroGlowA} />
         <View style={styles.heroGlowB} />
         <View style={styles.heroTop}>
-          <View style={styles.heroIcon}>
-            <AcademicCapIcon width={22} height={22} color="#F5B342" />
+          <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}24` }]}>
+            <AcademicCapIcon width={22} height={22} color={theme.primary} />
           </View>
           <View style={styles.heroText}>
-            <ThemedText type="small" style={styles.kicker}>
+            <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
               Gestion academica
             </ThemedText>
-            <ThemedText type="title" style={styles.heroTitle}>
+            <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
               Estudiantes
             </ThemedText>
-            <ThemedText style={styles.heroSubtitle}>
+            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
               Lista, estado y acceso rapido para mantener el padrón limpio y claro.
             </ThemedText>
           </View>
@@ -190,9 +193,15 @@ export default function EstudiantesScreen() {
         <ModuleHeader title="Estudiantes" onAdd={openCreate} addLabel="+ Nuevo" />
 
         {loading ? (
-          <ActivityIndicator size="large" color="#F5B342" style={styles.loader} />
+          <SkeletonList />
         ) : error ? (
-          <ThemedText style={styles.errorText}>{error}</ThemedText>
+          <ErrorState
+            message={error}
+            onRetry={() => {
+              setLoading(true);
+              loadData();
+            }}
+          />
         ) : (
           <FlatList
             data={estudiantes}
@@ -212,17 +221,22 @@ export default function EstudiantesScreen() {
               </ThemedView>
             }
             renderItem={({ item }) => (
-              <ThemedView type="backgroundElement" style={styles.card}>
+              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeading}>
-                    <ThemedText type="subtitle" style={styles.cardName}>
+                    <ThemedText type="subtitle" style={[styles.cardName, { color: theme.text }]}>
                       {item.nombres} {item.apellidos}
                     </ThemedText>
-                    <ThemedText type="small" style={styles.muted}>
+                    <ThemedText type="small" style={[styles.muted, { color: theme.textSecondary }]}>
                       Curso: {item.curso_nombre ?? 'Sin curso'}
                     </ThemedText>
                   </View>
-                  <ThemedText type="small" style={styles.statusPill}>
+                  <ThemedText
+                    type="small"
+                    style={[
+                      styles.statusPill,
+                      { backgroundColor: `${theme.accent}22`, color: theme.accent },
+                    ]}>
                     {item.estado}
                   </ThemedText>
                 </View>
@@ -230,11 +244,23 @@ export default function EstudiantesScreen() {
                   <Detail icon={CalendarDaysIcon} label="Documento" value={item.documento} />
                 </View>
                 <View style={styles.actions}>
-                  <Pressable onPress={() => openEdit(item)} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
-                    <PencilSquareIcon width={18} height={18} color="#60A5FA" />
+                  <Pressable
+                    onPress={() => openEdit(item)}
+                    style={({ pressed }) => [
+                      styles.iconBtn,
+                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                      pressed && styles.pressed,
+                    ]}>
+                    <PencilSquareIcon width={18} height={18} color={theme.primary} />
                   </Pressable>
-                  <Pressable onPress={() => handleDelete(item)} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
-                    <TrashIcon width={18} height={18} color="#F87171" />
+                  <Pressable
+                    onPress={() => handleDelete(item)}
+                    style={({ pressed }) => [
+                      styles.iconBtn,
+                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                      pressed && styles.pressed,
+                    ]}>
+                    <TrashIcon width={18} height={18} color={theme.danger} />
                   </Pressable>
                 </View>
               </ThemedView>
@@ -245,8 +271,8 @@ export default function EstudiantesScreen() {
 
         <Modal visible={modalVisible} animationType="slide" transparent>
           <View style={styles.modalOverlay}>
-            <ThemedView style={styles.modalContent}>
-              <ThemedText type="title" style={styles.modalTitle}>
+            <ThemedView style={[styles.modalContent, { borderColor: theme.border }]}>
+              <ThemedText type="title" style={[styles.modalTitle, { color: theme.text }]}>
                 {editing ? 'Editar estudiante' : 'Nuevo estudiante'}
               </ThemedText>
               <ScrollView contentContainerStyle={styles.form}>
@@ -313,15 +339,18 @@ export default function EstudiantesScreen() {
               <View style={styles.modalActions}>
                 <Pressable
                   onPress={() => setModalVisible(false)}
-                  style={styles.cancelBtn}
+                  style={[styles.cancelBtn, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}
                   disabled={saving}>
-                  <ThemedText style={styles.cancelBtnText}>Cancelar</ThemedText>
+                  <ThemedText style={[styles.cancelBtnText, { color: theme.text }]}>Cancelar</ThemedText>
                 </Pressable>
-                <Pressable onPress={handleSave} style={styles.saveBtn} disabled={saving}>
+                <Pressable
+                  onPress={handleSave}
+                  style={[styles.saveBtn, { backgroundColor: theme.primary }]}
+                  disabled={saving}>
                   {saving ? (
-                    <ActivityIndicator color="#101010" />
+                    <ActivityIndicator color={theme.primaryText} />
                   ) : (
-                    <ThemedText style={styles.saveBtnText}>Guardar</ThemedText>
+                    <ThemedText style={[styles.saveBtnText, { color: theme.primaryText }]}>Guardar</ThemedText>
                   )}
                 </Pressable>
               </View>
@@ -334,16 +363,18 @@ export default function EstudiantesScreen() {
 }
 
 function Detail({ icon: Icon, label, value }: { icon: IconType; label: string; value: string }) {
+  const theme = useTheme();
+
   return (
-    <View style={styles.detailChip}>
-      <View style={styles.detailIcon}>
-        <Icon width={14} height={14} color="#A7B0C0" />
+    <View style={[styles.detailChip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
+      <View style={[styles.detailIcon, { backgroundColor: `${theme.primary}1F` }]}>
+        <Icon width={14} height={14} color={theme.textSecondary} />
       </View>
       <View style={styles.detailText}>
-        <ThemedText type="small" style={styles.detailLabel}>
+        <ThemedText type="small" style={[styles.detailLabel, { color: theme.textSecondary }]}>
           {label}
         </ThemedText>
-        <ThemedText style={styles.detailValue}>{value}</ThemedText>
+        <ThemedText style={[styles.detailValue, { color: theme.text }]}>{value}</ThemedText>
       </View>
     </View>
   );
@@ -356,9 +387,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     padding: Spacing.four,
     borderRadius: Spacing.three,
-    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: '#232936',
     gap: Spacing.two,
   },
   heroGlowA: {
@@ -368,7 +397,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.12,
   },
   heroGlowB: {
@@ -378,7 +407,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.08,
   },
   heroTop: {
@@ -393,37 +422,31 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245, 179, 66, 0.12)',
   },
   heroText: { flex: 1, gap: 4 },
   kicker: {
-    color: '#F5B342',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
-  heroTitle: { color: '#F5F4F0' },
-  heroSubtitle: { color: 'rgba(245, 244, 240, 0.72)', lineHeight: 20 },
+  heroTitle: {},
+  heroSubtitle: { lineHeight: 20 },
   page: { gap: Spacing.three },
-  loader: { marginTop: Spacing.five },
   list: { gap: Spacing.three, paddingBottom: Spacing.five },
   card: {
     padding: Spacing.three,
     borderRadius: Spacing.three,
     gap: Spacing.three,
     borderWidth: 1,
-    borderColor: '#232936',
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   cardHeading: { flex: 1, gap: 4 },
-  cardName: { color: '#F5F4F0' },
-  muted: { opacity: 0.65, color: '#A7B0C0' },
+  cardName: {},
+  muted: { opacity: 0.75 },
   statusPill: {
     paddingHorizontal: Spacing.two,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: 'rgba(245, 179, 66, 0.12)',
-    color: '#F5B342',
     fontWeight: '800',
     fontSize: 11,
     textTransform: 'uppercase',
@@ -435,9 +458,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     padding: Spacing.two,
     borderRadius: Spacing.two,
-    backgroundColor: '#101827',
     borderWidth: 1,
-    borderColor: '#2A3344',
   },
   detailIcon: {
     width: 28,
@@ -448,8 +469,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(167, 176, 192, 0.08)',
   },
   detailText: { flex: 1, gap: 2 },
-  detailLabel: { color: '#A7B0C0', fontWeight: '700' },
-  detailValue: { color: '#F5F4F0', fontWeight: '600' },
+  detailLabel: { fontWeight: '700' },
+  detailValue: { fontWeight: '600' },
   actions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
   iconBtn: {
     width: 42,
@@ -457,9 +478,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#101827',
     borderWidth: 1,
-    borderColor: '#2A3344',
   },
   pressed: { opacity: 0.7 },
   emptyState: {
@@ -467,8 +486,7 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     alignItems: 'center',
   },
-  emptyText: { textAlign: 'center', opacity: 0.6, color: '#A7B0C0' },
-  errorText: { color: '#F87171', textAlign: 'center' },
+  emptyText: { textAlign: 'center', opacity: 0.6 },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -480,9 +498,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: Spacing.four,
     borderWidth: 1,
-    borderColor: '#232936',
   },
-  modalTitle: { marginBottom: Spacing.three, color: '#F5F4F0' },
+  modalTitle: { marginBottom: Spacing.three },
   form: { gap: Spacing.three, paddingBottom: Spacing.three },
   modalActions: { flexDirection: 'row', gap: Spacing.two },
   cancelBtn: {
@@ -491,16 +508,13 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Spacing.two,
     borderWidth: 1,
-    borderColor: '#2A3344',
-    backgroundColor: '#101827',
   },
-  cancelBtnText: { color: '#D4D9E2', fontWeight: '700' },
+  cancelBtnText: { fontWeight: '700' },
   saveBtn: {
     flex: 1,
     alignItems: 'center',
     padding: Spacing.three,
     borderRadius: Spacing.two,
-    backgroundColor: '#F5B342',
   },
-  saveBtnText: { color: '#101010', fontWeight: '800' },
+  saveBtnText: { fontWeight: '800' },
 });

@@ -2,15 +2,18 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
+import { SkeletonList } from '@/components/crud/FeedbackStates';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { MODULOS_ADMIN, getWelcomeForRole, isAdmin } from '@/lib/dashboard';
 import { getUserSession, setUserSession, type UserSession } from '@/lib/session';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const theme = useTheme();
   const [session, setSession] = useState<UserSession | null>(null);
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export default function DashboardScreen() {
   if (!session) {
     return (
       <ScreenShell contentStyle={styles.shellContent}>
-        <ThemedText>Cargando...</ThemedText>
+        <SkeletonList count={2} />
       </ScreenShell>
     );
   }
@@ -44,26 +47,28 @@ export default function DashboardScreen() {
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
-        <View style={styles.hero}>
+        <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
           <View style={styles.heroGlowA} />
           <View style={styles.heroGlowB} />
           <View style={styles.header}>
             <View style={styles.headerText}>
-              <ThemedText type="small" style={styles.kicker}>
+              <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
                 Panel principal
               </ThemedText>
-              <ThemedText type="title" style={styles.title}>
+              <ThemedText type="title" style={[styles.title, { color: theme.text }]}>
                 {welcome.titulo}
               </ThemedText>
-              <ThemedText style={styles.subtitle}>{welcome.subtitulo}</ThemedText>
+              <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>{welcome.subtitulo}</ThemedText>
               {session.welcomeMessage ? (
-                <ThemedView type="backgroundElement" style={styles.welcomeCard}>
-                  <ThemedText type="small" style={styles.welcomeMessage}>
+                <ThemedView
+                  type="backgroundElement"
+                  style={[styles.welcomeCard, { borderLeftColor: theme.primary }]}>
+                  <ThemedText type="small" style={[styles.welcomeMessage, { color: theme.text }]}>
                     {session.welcomeMessage}
                   </ThemedText>
                 </ThemedView>
               ) : null}
-              <ThemedText type="small" style={styles.rolBadge}>
+              <ThemedText type="small" style={[styles.rolBadge, { color: theme.textSecondary }]}>
                 Rol: {session.rol}
                 {session.roles && session.roles.length > 1
                   ? ` | tambien: ${session.roles.filter((r) => r !== session.rol).join(', ')}`
@@ -72,8 +77,12 @@ export default function DashboardScreen() {
             </View>
             <Pressable
               onPress={handleLogout}
-              style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}>
-              <ThemedText style={styles.logoutText}>Cerrar sesion</ThemedText>
+              style={({ pressed }) => [
+                styles.logoutButton,
+                { backgroundColor: theme.primary },
+                pressed && styles.logoutButtonPressed,
+              ]}>
+              <ThemedText style={[styles.logoutText, { color: theme.primaryText }]}>Cerrar sesion</ThemedText>
             </Pressable>
           </View>
         </View>
@@ -90,15 +99,17 @@ export default function DashboardScreen() {
                 <Pressable
                   onPress={() => handleNavigateToModulo(item.ruta)}
                   style={({ pressed }) => [styles.moduloCard, pressed && styles.moduloCardPressed]}>
-                  <ThemedView type="backgroundElement" style={styles.moduloContent}>
-                    <View style={styles.moduloIconWrap}>
-                      <item.icon width={22} height={22} color="#F5B342" />
+                  <ThemedView
+                    type="backgroundElement"
+                    style={[styles.moduloContent, { borderColor: theme.border }]}>
+                    <View style={[styles.moduloIconWrap, { backgroundColor: `${theme.primary}24` }]}>
+                      <item.icon width={22} height={22} color={theme.primary} />
                     </View>
                     <View style={styles.moduloText}>
                       <ThemedText type="subtitle" style={styles.moduloNombre}>
                         {item.nombre}
                       </ThemedText>
-                      <ThemedText type="small" style={styles.moduloDescripcion}>
+                      <ThemedText type="small" style={[styles.moduloDescripcion, { color: theme.textSecondary }]}>
                         {item.descripcion}
                       </ThemedText>
                     </View>
@@ -134,9 +145,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.three,
     padding: Spacing.four,
     borderRadius: Spacing.three,
-    backgroundColor: '#111827',
     borderWidth: 1,
-    borderColor: '#232936',
   },
   heroGlowA: {
     position: 'absolute',
@@ -145,7 +154,7 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.15,
   },
   heroGlowB: {
@@ -155,7 +164,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 999,
-    backgroundColor: '#F5B342',
+    backgroundColor: '#79D0F2',
     opacity: 0.08,
   },
   header: {
@@ -167,34 +176,30 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, gap: Spacing.two },
   kicker: {
-    color: '#F5B342',
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
-  title: { marginBottom: 0, color: '#F5F4F0' },
-  subtitle: { opacity: 0.78, color: 'rgba(245, 244, 240, 0.72)' },
+  title: { marginBottom: 0 },
+  subtitle: { opacity: 0.78 },
   welcomeCard: {
     padding: Spacing.three,
     borderRadius: Spacing.two,
     borderLeftWidth: 3,
-    borderLeftColor: '#F5B342',
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
-  welcomeMessage: { lineHeight: 20, opacity: 0.9, color: '#F5F4F0' },
+  welcomeMessage: { lineHeight: 20, opacity: 0.9 },
   rolBadge: {
     opacity: 0.68,
     textTransform: 'capitalize',
-    color: 'rgba(245, 244, 240, 0.72)',
   },
   logoutButton: {
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
-    backgroundColor: '#F5B342',
     borderRadius: Spacing.two,
   },
   logoutButtonPressed: { opacity: 0.8 },
-  logoutText: { color: '#101010', fontWeight: '700', fontSize: 12 },
+  logoutText: { fontWeight: '700', fontSize: 12 },
   modulesWrap: {
     gap: Spacing.two,
   },
@@ -211,7 +216,6 @@ const styles = StyleSheet.create({
     borderRadius: Spacing.two,
     gap: Spacing.three,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   moduloIconWrap: {
     width: 48,
@@ -219,7 +223,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(245, 179, 66, 0.14)',
   },
   moduloIcono: { fontSize: 26 },
   moduloText: { flex: 1, gap: Spacing.one },
