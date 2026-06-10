@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
   Pressable,
   RefreshControl,
@@ -63,13 +62,21 @@ export default function EstudiantesScreen() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [cursoFiltro, setCursoFiltro] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState('');
   const [page, setPage] = useState(1);
+  const deferredSearch = useDeferredValue(search);
 
   const loadData = useCallback(async () => {
     try {
       setError('');
+      const params = new URLSearchParams();
+      if (deferredSearch.trim()) params.set('q', deferredSearch.trim());
+      if (cursoFiltro) params.set('cursoId', cursoFiltro);
+      if (estadoFiltro) params.set('estado', estadoFiltro);
+      params.set('limit', '120');
+      const query = params.toString() ? `?${params.toString()}` : '';
       const [estRes, cursosRes] = await Promise.all([
-        apiFetch<Estudiante[]>('/api/estudiantes'),
+        apiFetch<Estudiante[]>(`/api/estudiantes${query}`),
         apiFetch<Curso[]>('/api/cursos'),
       ]);
       setEstudiantes(estRes.data ?? []);
@@ -80,11 +87,15 @@ export default function EstudiantesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [cursoFiltro, deferredSearch, estadoFiltro]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [cursoFiltro, deferredSearch, estadoFiltro]);
 
   const openCreate = () => {
     setEditing(null);
@@ -178,21 +189,9 @@ export default function EstudiantesScreen() {
     [estudiantes]
   );
 
-  const filteredStudents = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return decoratedStudents.filter((est) => {
-      const matchesSearch =
-        !q ||
-        `${est.nombres} ${est.apellidos}`.toLowerCase().includes(q) ||
-        est.documento.toLowerCase().includes(q);
-      const matchesCurso = !cursoFiltro || String(est.curso_id) === cursoFiltro;
-      return matchesSearch && matchesCurso;
-    });
-  }, [decoratedStudents, search, cursoFiltro]);
-
   const pageSize = 5;
-  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
-  const visibleStudents = filteredStudents.slice((page - 1) * pageSize, page * pageSize);
+  const totalPages = Math.max(1, Math.ceil(decoratedStudents.length / pageSize));
+  const visibleStudents = decoratedStudents.slice((page - 1) * pageSize, page * pageSize);
 
   const stats = useMemo(() => {
     const total = estudiantes.length;
@@ -276,10 +275,11 @@ export default function EstudiantesScreen() {
                 <TextInput
                   value={search}
                   onChangeText={(value) => {
-                    setSearch(value);
-                    setPage(1);
+                    startTransition(() => {
+                      setSearch(value);
+                    });
                   }}
-                  placeholder="Buscar estudiante o codigo"
+                  placeholder="Buscar estudiante, documento o grado"
                   placeholderTextColor={theme.textSecondary}
                   style={[styles.searchInput, { color: theme.text }]}
                 />
@@ -309,6 +309,31 @@ export default function EstudiantesScreen() {
                       ]}>
                       <ThemedText style={[styles.gradeChipText, { color: active ? theme.primaryText : theme.text }]}>
                         {curso.nombre}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gradeFilters}>
+                {[
+                  { value: '', label: 'Todos los estados' },
+                  { value: 'activo', label: 'Activos' },
+                  { value: 'inactivo', label: 'Inactivos' },
+                  { value: 'retirado', label: 'Retirados' },
+                  { value: 'egresado', label: 'Egresados' },
+                ].map((estado) => {
+                  const active = estadoFiltro === estado.value;
+                  return (
+                    <Pressable
+                      key={estado.label}
+                      onPress={() => setEstadoFiltro(estado.value)}
+                      style={[
+                        styles.gradeChip,
+                        { borderColor: theme.border },
+                        active && { backgroundColor: theme.warning, borderColor: theme.warning },
+                      ]}>
+                      <ThemedText style={[styles.gradeChipText, { color: active ? '#10212B' : theme.text }]}>
+                        {estado.label}
                       </ThemedText>
                     </Pressable>
                   );
@@ -370,7 +395,7 @@ export default function EstudiantesScreen() {
 
             <View style={styles.pagination}>
               <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                Mostrando {visibleStudents.length} de {filteredStudents.length} estudiantes
+                Mostrando {visibleStudents.length} de {decoratedStudents.length} estudiantes
               </ThemedText>
               <View style={styles.paginationButtons}>
                 <Pressable

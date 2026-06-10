@@ -31,6 +31,7 @@ export default function DashboardLayout() {
           <Stack.Screen name="horarios" />
           <Stack.Screen name="asistencias" />
           <Stack.Screen name="comunicados" />
+          <Stack.Screen name="boletines" />
         </Stack>
       </View>
     </View>

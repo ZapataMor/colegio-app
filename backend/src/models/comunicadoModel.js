@@ -20,7 +20,14 @@ FROM comunicados c
 LEFT JOIN cursos cu ON cu.id = c.curso_id
 LEFT JOIN personas p ON p.id = c.publicado_por_persona_id`;
 
-const findAll = async ({ audiencia = null, cursoId = null, estado = null, limit = 50 } = {}) => {
+const findAll = async ({
+  audiencia = null,
+  cursoId = null,
+  estado = null,
+  q = null,
+  prioridad = null,
+  limit = 50,
+} = {}) => {
   let query = baseSelect;
   const conditions = [];
   const params = [];
@@ -38,6 +45,21 @@ const findAll = async ({ audiencia = null, cursoId = null, estado = null, limit 
   if (estado) {
     conditions.push("c.estado = ?");
     params.push(estado);
+  }
+
+  if (prioridad) {
+    conditions.push("c.prioridad = ?");
+    params.push(prioridad);
+  }
+
+  if (q) {
+    const term = `%${q}%`;
+    conditions.push(`(
+      c.titulo LIKE ? OR
+      c.resumen LIKE ? OR
+      c.contenido LIKE ?
+    )`);
+    params.push(term, term, term);
   }
 
   if (conditions.length > 0) {

@@ -6,9 +6,13 @@ const profesorModel = require("../models/profesorModel");
  */
 const getAllProfesores = async (req, res, next) => {
   try {
-    const { estado } = req.query;
+    const { estado, q, limit } = req.query;
 
-    const profesores = await profesorModel.findAll(estado);
+    const profesores = await profesorModel.findAll({
+      estado: estado || null,
+      q: q?.trim() || null,
+      limit: limit || null,
+    });
 
     return res.json({
       ok: true,

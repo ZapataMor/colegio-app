@@ -19,15 +19,15 @@ const usuarios = [
     contrasena: "Docente123*",
     rol: "profesor",
     nombre: "Juan",
-    apellido: "García",
+    apellido: "Garcia",
     documento: "800000001",
   },
   {
     correo: "docente2@colegio.com",
     contrasena: "Docente123*",
     rol: "profesor",
-    nombre: "María",
-    apellido: "López",
+    nombre: "Maria",
+    apellido: "Lopez",
     documento: "800000002",
   },
   {
@@ -35,7 +35,7 @@ const usuarios = [
     contrasena: "Estudiante123*",
     rol: "estudiante",
     nombre: "Carlos",
-    apellido: "Martínez",
+    apellido: "Martinez",
     documento: "700000001",
   },
   {
@@ -43,7 +43,7 @@ const usuarios = [
     contrasena: "Estudiante123*",
     rol: "estudiante",
     nombre: "Laura",
-    apellido: "Rodríguez",
+    apellido: "Rodriguez",
     documento: "700000002",
   },
 ];
@@ -51,15 +51,15 @@ const usuarios = [
 const profesoresExtra = [
   {
     nombres: "Pedro",
-    apellidos: "Sánchez",
+    apellidos: "Sanchez",
     documento: "1234567890",
     correo: "pedro@colegio.com",
     telefono: "3001234567",
-    especialidad: "Matemáticas",
+    especialidad: "Matematicas",
   },
   {
     nombres: "Ana",
-    apellidos: "Fernández",
+    apellidos: "Fernandez",
     documento: "0987654321",
     correo: "ana@colegio.com",
     telefono: "3002345678",
@@ -70,13 +70,13 @@ const profesoresExtra = [
 const estudiantesExtra = [
   {
     nombres: "Diego",
-    apellidos: "Gómez",
+    apellidos: "Gomez",
     documento: "1111111111",
     genero: "masculino",
   },
   {
-    nombres: "Sofía",
-    apellidos: "Hernández",
+    nombres: "Sofia",
+    apellidos: "Hernandez",
     documento: "2222222222",
     genero: "femenino",
   },
@@ -94,20 +94,102 @@ const ensurePersona = async (user) => {
   return result.insertId;
 };
 
+const seedAcademicData = async () => {
+  const [periodos] = await pool.query(
+    `SELECT id, fecha_inicio, fecha_fin
+    FROM periodos_academicos
+    ORDER BY (estado = 'activo') DESC, fecha_inicio DESC
+    LIMIT 1`
+  );
+  const periodo = periodos[0];
+  if (!periodo) return;
+
+  const [profesores] = await pool.query(
+    `SELECT id FROM profesores WHERE estado = 'activo' ORDER BY id ASC LIMIT 3`
+  );
+  const [asignaturas] = await pool.query(
+    `SELECT id FROM asignaturas WHERE estado = 'activo' ORDER BY id ASC LIMIT 4`
+  );
+  const [estudiantes] = await pool.query(
+    `SELECT id, curso_id FROM estudiantes WHERE estado = 'activo' ORDER BY id ASC LIMIT 4`
+  );
+
+  if (profesores.length === 0 || asignaturas.length === 0 || estudiantes.length === 0) return;
+
+  for (const estudiante of estudiantes) {
+    for (let index = 0; index < asignaturas.length; index += 1) {
+      const asignatura = asignaturas[index];
+      const profesor = profesores[index % profesores.length];
+      const nota = Number((3 + ((estudiante.id + index) % 20) / 10).toFixed(2));
+
+      await pool.query(
+        `INSERT INTO notas
+          (estudiante_id, curso_id, asignatura_id, profesor_id, periodo_id, nota, observacion, fecha_registro)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE())
+        ON DUPLICATE KEY UPDATE
+          nota = VALUES(nota),
+          observacion = VALUES(observacion),
+          updated_at = CURRENT_TIMESTAMP`,
+        [
+          estudiante.id,
+          estudiante.curso_id,
+          asignatura.id,
+          profesor.id,
+          periodo.id,
+          nota,
+          nota < 3 ? "Requiere plan de apoyo y acompanamiento." : "Buen avance durante el periodo.",
+        ]
+      );
+    }
+
+    const attendanceDays = ["2026-04-10", "2026-04-17", "2026-05-08", "2026-05-22"];
+    for (let index = 0; index < attendanceDays.length; index += 1) {
+      const fecha = attendanceDays[index];
+      if (fecha < periodo.fecha_inicio || fecha > periodo.fecha_fin) continue;
+
+      const estado =
+        index === 1 && estudiante.id % 2 === 0
+          ? "ausente"
+          : index === 2
+            ? "tardanza"
+            : "presente";
+
+      await pool.query(
+        `INSERT INTO asistencias
+          (estudiante_id, curso_id, asignatura_id, profesor_id, fecha, estado_asistencia, observacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          estado_asistencia = VALUES(estado_asistencia),
+          observacion = VALUES(observacion),
+          updated_at = CURRENT_TIMESTAMP`,
+        [
+          estudiante.id,
+          estudiante.curso_id,
+          asignaturas[index % asignaturas.length].id,
+          profesores[index % profesores.length].id,
+          fecha,
+          estado,
+          estado === "ausente" ? "Ausencia registrada en seed de prueba." : null,
+        ]
+      );
+    }
+  }
+};
+
 const seed = async () => {
   try {
-    console.log("🌱 Iniciando seeding...\n");
+    console.log("Iniciando seeding...\n");
 
     const [roles] = await pool.query("SELECT id, nombre FROM roles");
     const roleByName = new Map(roles.map((role) => [role.nombre, role.id]));
 
     const [cursos] = await pool.query("SELECT id, nombre FROM cursos");
     if (cursos.length === 0) {
-      throw new Error("No existen cursos. Por favor ejecuta primero el schema.sql");
+      throw new Error("No existen cursos. Ejecuta primero el schema.sql");
     }
     const cursoId = cursos[0].id;
 
-    console.log("👨‍🏫 Creando profesores (personas)...");
+    console.log("Creando profesores...");
     for (const user of usuarios.filter((u) => u.rol === "profesor")) {
       const exists = await profesorModel.findByDocumento(user.documento);
       if (!exists) {
@@ -118,7 +200,7 @@ const seed = async () => {
           correo: user.correo,
           especialidad: "General",
         });
-        console.log(`  ✓ Profesor ${user.nombre} ${user.apellido}`);
+        console.log(`  Profesor ${user.nombre} ${user.apellido}`);
       }
     }
 
@@ -126,11 +208,11 @@ const seed = async () => {
       const exists = await profesorModel.findByDocumento(profesor.documento);
       if (!exists) {
         await profesorModel.create(profesor);
-        console.log(`  ✓ Profesor ${profesor.nombres} ${profesor.apellidos}`);
+        console.log(`  Profesor ${profesor.nombres} ${profesor.apellidos}`);
       }
     }
 
-    console.log("\n🎓 Creando estudiantes (personas)...");
+    console.log("\nCreando estudiantes...");
     for (const user of usuarios.filter((u) => u.rol === "estudiante")) {
       const exists = await estudianteModel.findByDocumento(user.documento);
       if (!exists) {
@@ -142,7 +224,7 @@ const seed = async () => {
           correo: user.correo,
           genero: "no_especifica",
         });
-        console.log(`  ✓ Estudiante ${user.nombre} ${user.apellido}`);
+        console.log(`  Estudiante ${user.nombre} ${user.apellido}`);
       }
     }
 
@@ -150,18 +232,18 @@ const seed = async () => {
       const exists = await estudianteModel.findByDocumento(estudiante.documento);
       if (!exists) {
         await estudianteModel.create({ cursoId, ...estudiante });
-        console.log(`  ✓ Estudiante ${estudiante.nombres} ${estudiante.apellidos}`);
+        console.log(`  Estudiante ${estudiante.nombres} ${estudiante.apellidos}`);
       }
     }
 
-    console.log("\n📝 Creando accesos de usuario...");
+    console.log("\nCreando accesos...");
     for (const user of usuarios) {
       const rolId = roleByName.get(user.rol);
       if (!rolId) continue;
 
       const existingUser = await userModel.findByCorreo(user.correo);
       if (existingUser) {
-        console.log(`  ✓ Acceso ${user.correo} ya existe`);
+        console.log(`  Acceso ${user.correo} ya existe`);
         continue;
       }
 
@@ -178,7 +260,7 @@ const seed = async () => {
       }
 
       if (!personaId) {
-        console.warn(`  ⚠️  No se encontró persona para ${user.correo}`);
+        console.warn(`  No se encontro persona para ${user.correo}`);
         continue;
       }
 
@@ -188,10 +270,10 @@ const seed = async () => {
         rolId,
         passwordHash,
       });
-      console.log(`  ✓ Acceso ${user.correo} creado (usuario ID: ${userId})`);
+      console.log(`  Acceso ${user.correo} creado (usuario ID: ${userId})`);
     }
 
-    console.log("\n📋 Creando matrículas...");
+    console.log("\nCreando matriculas...");
     const anioActual = new Date().getFullYear();
     const [todosEstudiantes] = await pool.query(
       "SELECT id, curso_id FROM estudiantes WHERE estado = 'activo' LIMIT 10"
@@ -208,7 +290,10 @@ const seed = async () => {
       });
     }
 
-    console.log("\n✅ Seeding completado!\n");
+    console.log("\nCreando datos academicos base...");
+    await seedAcademicData();
+
+    console.log("\nSeeding completado.\n");
     console.log("Credenciales de prueba:");
     console.log("  Admin: admin@colegio.com / Admin123*");
     console.log("  Profesor: docente1@colegio.com / Docente123*");
@@ -217,7 +302,7 @@ const seed = async () => {
 
     await pool.end();
   } catch (error) {
-    console.error("❌ Error en seeding:", error.message);
+    console.error("Error en seeding:", error.message);
     await pool.end();
     process.exit(1);
   }

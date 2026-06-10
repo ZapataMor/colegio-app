@@ -30,7 +30,7 @@ const findById = async (id) => {
   return rows[0] || null;
 };
 
-const findAll = async (estado = null, cursoId = null) => {
+const findAll = async ({ estado = null, cursoId = null, q = null, limit = null } = {}) => {
   let query = baseSelect;
   const params = [];
   const conditions = [];
@@ -45,11 +45,28 @@ const findAll = async (estado = null, cursoId = null) => {
     params.push(cursoId);
   }
 
+  if (q) {
+    const term = `%${q}%`;
+    conditions.push(`(
+      p.nombres LIKE ? OR
+      p.apellidos LIKE ? OR
+      p.documento LIKE ? OR
+      CONCAT(p.nombres, ' ', p.apellidos) LIKE ? OR
+      c.nombre LIKE ?
+    )`);
+    params.push(term, term, term, term, term);
+  }
+
   if (conditions.length > 0) {
     query += ` WHERE ${conditions.join(" AND ")}`;
   }
 
   query += ` ORDER BY p.apellidos, p.nombres ASC`;
+
+  if (limit) {
+    query += ` LIMIT ?`;
+    params.push(Number(limit));
+  }
 
   const [rows] = await pool.query(query, params);
   return rows;

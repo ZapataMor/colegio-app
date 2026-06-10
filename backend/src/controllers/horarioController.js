@@ -10,6 +10,8 @@ const getAllHorarios = async (req, res, next) => {
       profesorPersonaId: req.query.profesorPersonaId || null,
       dia: req.query.dia || null,
       estado: req.query.estado || null,
+      q: req.query.q?.trim() || null,
+      limit: req.query.limit || null,
     });
 
     return res.json({

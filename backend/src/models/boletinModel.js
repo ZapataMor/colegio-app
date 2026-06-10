@@ -1,0 +1,180 @@
+const pool = require("../config/db");
+
+const findCatalog = async () => {
+  const [estudiantes] = await pool.query(
+    `SELECT
+      e.id,
+      CONCAT(p.nombres, ' ', p.apellidos) AS nombre,
+      p.documento,
+      c.nombre AS curso_nombre
+    FROM estudiantes e
+    INNER JOIN personas p ON p.id = e.persona_id
+    INNER JOIN cursos c ON c.id = e.curso_id
+    WHERE e.estado IN ('activo', 'egresado')
+    ORDER BY p.apellidos, p.nombres ASC`
+  );
+
+  const [periodos] = await pool.query(
+    `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+    FROM periodos_academicos
+    ORDER BY fecha_inicio DESC`
+  );
+
+  return { estudiantes, periodos };
+};
+
+const findPeriodo = async (periodoId = null) => {
+  const [rows] = await pool.query(
+    periodoId
+      ? `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+         FROM periodos_academicos
+         WHERE id = ?
+         LIMIT 1`
+      : `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+         FROM periodos_academicos
+         ORDER BY (estado = 'activo') DESC, fecha_inicio DESC
+         LIMIT 1`,
+    periodoId ? [periodoId] : []
+  );
+
+  return rows[0] || null;
+};
+
+const findStudentInfo = async (estudianteId) => {
+  const [rows] = await pool.query(
+    `SELECT
+      e.id,
+      e.persona_id,
+      e.curso_id,
+      e.codigo_estudiante,
+      e.estado,
+      p.nombres,
+      p.apellidos,
+      p.documento,
+      p.correo,
+      p.fecha_nacimiento,
+      c.nombre AS curso_nombre,
+      c.nivel AS curso_nivel,
+      c.jornada AS curso_jornada
+    FROM estudiantes e
+    INNER JOIN personas p ON p.id = e.persona_id
+    INNER JOIN cursos c ON c.id = e.curso_id
+    WHERE e.id = ?
+    LIMIT 1`,
+    [estudianteId]
+  );
+
+  return rows[0] || null;
+};
+
+const findMaterias = async (estudianteId, periodoId) => {
+  const [rows] = await pool.query(
+    `SELECT
+      n.id,
+      n.nota,
+      n.observacion,
+      a.nombre AS asignatura,
+      CONCAT(p.nombres, ' ', p.apellidos) AS profesor
+    FROM notas n
+    INNER JOIN asignaturas a ON a.id = n.asignatura_id
+    INNER JOIN profesores pr ON pr.id = n.profesor_id
+    INNER JOIN personas p ON p.id = pr.persona_id
+    WHERE n.estudiante_id = ? AND n.periodo_id = ?
+    ORDER BY a.nombre ASC`,
+    [estudianteId, periodoId]
+  );
+
+  return rows;
+};
+
+const findAttendanceSummary = async (estudianteId, fechaInicio, fechaFin) => {
+  const [rows] = await pool.query(
+    `SELECT
+      estado_asistencia,
+      COUNT(*) AS total
+    FROM asistencias
+    WHERE estudiante_id = ? AND fecha BETWEEN ? AND ?
+    GROUP BY estado_asistencia`,
+    [estudianteId, fechaInicio, fechaFin]
+  );
+
+  return rows;
+};
+
+const buildBoletin = async (estudianteId, periodoId = null) => {
+  const [estudiante, periodo] = await Promise.all([
+    findStudentInfo(estudianteId),
+    findPeriodo(periodoId),
+  ]);
+
+  if (!estudiante) {
+    throw Object.assign(new Error("Estudiante no encontrado."), { statusCode: 404 });
+  }
+
+  if (!periodo) {
+    throw Object.assign(new Error("No hay periodos academicos configurados."), { statusCode: 404 });
+  }
+
+  const [materiasRows, attendanceRows] = await Promise.all([
+    findMaterias(estudianteId, periodo.id),
+    findAttendanceSummary(estudianteId, periodo.fecha_inicio, periodo.fecha_fin),
+  ]);
+
+  const materias = materiasRows.map((item) => ({
+    ...item,
+    nota: Number(item.nota),
+    desempeno:
+      Number(item.nota) >= 4.6
+        ? "Superior"
+        : Number(item.nota) >= 4
+          ? "Alto"
+          : Number(item.nota) >= 3
+            ? "Basico"
+            : "Bajo",
+  }));
+
+  const promedioGeneral = materias.length
+    ? Number(
+        (materias.reduce((acc, item) => acc + Number(item.nota), 0) / materias.length).toFixed(2)
+      )
+    : 0;
+
+  const asistencia = attendanceRows.reduce(
+    (acc, row) => {
+      acc[row.estado_asistencia] = Number(row.total);
+      acc.total += Number(row.total);
+      return acc;
+    },
+    { presente: 0, ausente: 0, excusa: 0, tardanza: 0, total: 0 }
+  );
+
+  const porcentajeAsistencia = asistencia.total
+    ? Math.round(((asistencia.presente + asistencia.excusa) / asistencia.total) * 100)
+    : 0;
+
+  return {
+    estudiante,
+    periodo,
+    materias,
+    resumen: {
+      promedioGeneral,
+      materiasRegistradas: materias.length,
+      materiasAprobadas: materias.filter((item) => item.nota >= 3).length,
+      materiasEnRiesgo: materias.filter((item) => item.nota < 3).length,
+      porcentajeAsistencia,
+    },
+    asistencia,
+    observaciones: materias
+      .filter((item) => item.observacion)
+      .slice(0, 4)
+      .map((item) => ({
+        asignatura: item.asignatura,
+        observacion: item.observacion,
+      })),
+  };
+};
+
+module.exports = {
+  findCatalog,
+  buildBoletin,
+};

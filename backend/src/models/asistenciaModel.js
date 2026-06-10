@@ -33,6 +33,9 @@ const findAll = async ({
   estudianteId = null,
   profesorId = null,
   profesorPersonaId = null,
+  estadoAsistencia = null,
+  q = null,
+  limit = null,
 } = {}) => {
   let query = baseSelect;
   const conditions = [];
@@ -63,11 +66,33 @@ const findAll = async ({
     params.push(profesorPersonaId);
   }
 
+  if (estadoAsistencia) {
+    conditions.push("a.estado_asistencia = ?");
+    params.push(estadoAsistencia);
+  }
+
+  if (q) {
+    const term = `%${q}%`;
+    conditions.push(`(
+      pe.nombres LIKE ? OR
+      pe.apellidos LIKE ? OR
+      pe.documento LIKE ? OR
+      s.nombre LIKE ? OR
+      CONCAT(pe.nombres, ' ', pe.apellidos) LIKE ?
+    )`);
+    params.push(term, term, term, term, term);
+  }
+
   if (conditions.length > 0) {
     query += ` WHERE ${conditions.join(" AND ")}`;
   }
 
   query += ` ORDER BY a.fecha DESC, pe.apellidos ASC, pe.nombres ASC`;
+
+  if (limit) {
+    query += ` LIMIT ?`;
+    params.push(Number(limit));
+  }
 
   const [rows] = await pool.query(query, params);
   return rows;

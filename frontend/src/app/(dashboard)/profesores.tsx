@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -59,11 +59,18 @@ export default function ProfesoresScreen() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState('');
+  const deferredSearch = useDeferredValue(search);
 
   const loadData = useCallback(async () => {
     try {
       setError('');
-      const res = await apiFetch<Profesor[]>('/api/profesores');
+      const params = new URLSearchParams();
+      if (deferredSearch.trim()) params.set('q', deferredSearch.trim());
+      if (estadoFiltro) params.set('estado', estadoFiltro);
+      params.set('limit', '120');
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const res = await apiFetch<Profesor[]>(`/api/profesores${query}`);
       setProfesores(res.data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar profesores.');
@@ -71,7 +78,7 @@ export default function ProfesoresScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [deferredSearch, estadoFiltro]);
 
   useEffect(() => {
     loadData();
@@ -151,16 +158,6 @@ export default function ProfesoresScreen() {
     );
   };
 
-  const filteredProfesores = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return profesores;
-    return profesores.filter((prof) =>
-      `${prof.nombres} ${prof.apellidos} ${prof.documento} ${prof.especialidad ?? ''}`
-        .toLowerCase()
-        .includes(q)
-    );
-  }, [profesores, search]);
-
   const stats = useMemo(() => {
     const activos = profesores.filter((prof) => prof.estado === 'activo').length;
     const conCorreo = profesores.filter((prof) => Boolean(prof.correo)).length;
@@ -229,14 +226,29 @@ export default function ProfesoresScreen() {
 
             <View style={[styles.searchBox, { borderColor: theme.border }]}>
               <MagnifyingGlassIcon width={16} height={16} color={theme.textSecondary} />
-              <TextInput
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Buscar docente, documento o especialidad"
-                placeholderTextColor={theme.textSecondary}
-                style={[styles.searchInput, { color: theme.text }]}
-              />
-            </View>
+                <TextInput
+                  value={search}
+                  onChangeText={(value) => {
+                    startTransition(() => {
+                      setSearch(value);
+                    });
+                  }}
+                  placeholder="Buscar docente, documento o especialidad"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.searchInput, { color: theme.text }]}
+                />
+              </View>
+
+            <OptionChips
+              label="Estado"
+              options={[
+                { value: '', label: 'Todos' },
+                { value: 'activo', label: 'Activos' },
+                { value: 'inactivo', label: 'Inactivos' },
+              ]}
+              value={estadoFiltro}
+              onChange={setEstadoFiltro}
+            />
 
             <ThemedView type="backgroundElement" style={[styles.table, { borderColor: theme.border }]}>
               <View style={[styles.tableHeader, { borderBottomColor: theme.border }]}>
@@ -245,10 +257,10 @@ export default function ProfesoresScreen() {
                 <ThemedText style={styles.headCell}>ESPECIALIDAD</ThemedText>
                 <ThemedText style={styles.headCell}>ESTADO</ThemedText>
               </View>
-              {filteredProfesores.length === 0 ? (
+              {profesores.length === 0 ? (
                 <ThemedText style={styles.emptyText}>No hay profesores para mostrar.</ThemedText>
               ) : (
-                filteredProfesores.map((item) => (
+                profesores.map((item) => (
                   <Pressable
                     key={item.id}
                     onPress={() => openEdit(item)}

@@ -32,6 +32,13 @@ export const MODULOS_ADMIN: Modulo[] = [
     ruta: '/(dashboard)/asistencias',
   },
   {
+    id: 'boletines',
+    nombre: 'Boletines',
+    descripcion: 'Consulta e imprime reportes academicos por estudiante',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/boletines',
+  },
+  {
     id: 'matricula',
     nombre: 'Matricula',
     descripcion: 'Gestion de matriculas de estudiantes',
@@ -114,6 +121,13 @@ export const MODULOS_ESTUDIANTE: Modulo[] = [
     icon: CrudIcons.megaphone,
     ruta: '/(dashboard)/comunicados',
   },
+  {
+    id: 'boletines',
+    nombre: 'Mi boletin',
+    descripcion: 'Visualiza tu resumen academico por periodo.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/boletines',
+  },
 ];
 
 export const MODULOS_ACUDIENTE: Modulo[] = [
@@ -137,6 +151,13 @@ export const MODULOS_ACUDIENTE: Modulo[] = [
     descripcion: 'Consulta circulares y mensajes del colegio.',
     icon: CrudIcons.megaphone,
     ruta: '/(dashboard)/comunicados',
+  },
+  {
+    id: 'boletines',
+    nombre: 'Boletines',
+    descripcion: 'Prepara la consulta del boletin academico del acudido.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/boletines',
   },
 ];
 

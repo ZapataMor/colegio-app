@@ -10,6 +10,8 @@ const getAllComunicados = async (req, res, next) => {
       audiencia: req.query.audiencia || null,
       cursoId: req.query.cursoId || null,
       estado: req.query.estado || null,
+      q: req.query.q?.trim() || null,
+      prioridad: req.query.prioridad || null,
       limit: req.query.limit || 50,
     });
 

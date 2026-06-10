@@ -111,3 +111,43 @@ Backend v2 personas+roles. Usuarios vinculan persona existente. Dashboard por ro
 
 ### Nota de diseno
 - Se tomo como criterio de Expo Go usar patrones compatibles con runtime sin depender de configuracion nativa extra: jerarquia fuerte, paneles claros, chips, fondos atmosfericos y contraste alto antes que efectos pesados.
+
+---
+
+## ACTUALIZACION v7 (10/06/2026 - Filtros rapidos y Boletin)
+
+### Backend
+- Los listados principales ahora aceptan busqueda remota por `q` y filtros mas utiles:
+  - `/api/estudiantes?q=&cursoId=&estado=&limit=`
+  - `/api/profesores?q=&estado=&limit=`
+  - `/api/horarios?q=&dia=&estado=&limit=`
+  - `/api/asistencias?q=&estadoAsistencia=&cursoId=&fecha=&limit=`
+  - `/api/comunicados?q=&prioridad=&audiencia=&limit=`
+- Nuevo modulo backend de boletines:
+  - `/api/boletines/catalogo`
+  - `/api/boletines/estudiantes/:estudianteId?periodoId=`
+- `backend/scripts/seed.js` ahora tambien genera datos base de `notas` y `asistencias` para que el boletin tenga contenido real de prueba.
+
+### Frontend
+- `estudiantes.tsx` y `profesores.tsx` ya no dependen solo de filtrado local; consumen filtros remotos para sentirse mas rapidos y estables con mas datos.
+- Nueva pantalla `frontend/src/app/(dashboard)/boletines.tsx`:
+  - selector de estudiante
+  - selector de periodo
+  - resumen academico
+  - tabla de materias
+  - resumen de asistencia
+  - boton `Imprimir` en web con `window.print()`
+- `dashboard` ya expone el modulo `Boletines`.
+
+### Validacion
+- `npx.cmd tsc --noEmit` OK
+- `node --check` OK en `boletinModel`, `boletinController` y `seed.js`
+- `node backend/scripts/seed.js` OK
+- Prueba real contra Express + MySQL local:
+  - `GET /api/profesores?q=juan&limit=5` OK
+  - `GET /api/boletines/catalogo` OK
+  - `GET /api/boletines/estudiantes/:id?periodoId=2` OK
+  - Resultado real de prueba: 4 materias, promedio `3.45`, asistencia `75%`
+
+### Nota funcional
+- La impresion directa del boletin queda orientada a web/escritorio. En Expo Go movil se mantiene la vista de consulta, pero el flujo de impresion como tal se resuelve mejor en navegador.

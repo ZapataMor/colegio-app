@@ -10,6 +10,7 @@ const personaRoutes = require("./routes/personaRoutes");
 const horarioRoutes = require("./routes/horarioRoutes");
 const asistenciaRoutes = require("./routes/asistenciaRoutes");
 const comunicadoRoutes = require("./routes/comunicadoRoutes");
+const boletinRoutes = require("./routes/boletinRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const pool = require("./config/db");
 
@@ -91,6 +92,7 @@ app.use("/", personaRoutes);
 app.use("/", horarioRoutes);
 app.use("/", asistenciaRoutes);
 app.use("/", comunicadoRoutes);
+app.use("/", boletinRoutes);
 
 app.use(errorHandler);
 

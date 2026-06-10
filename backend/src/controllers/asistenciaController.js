@@ -10,6 +10,9 @@ const getAllAsistencias = async (req, res, next) => {
       estudianteId: req.query.estudianteId || null,
       profesorId: req.query.profesorId || null,
       profesorPersonaId: req.query.profesorPersonaId || null,
+      estadoAsistencia: req.query.estadoAsistencia || null,
+      q: req.query.q?.trim() || null,
+      limit: req.query.limit || null,
     });
 
     return res.json({

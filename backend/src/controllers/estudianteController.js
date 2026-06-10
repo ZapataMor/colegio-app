@@ -6,9 +6,14 @@ const estudianteModel = require("../models/estudianteModel");
  */
 const getAllEstudiantes = async (req, res, next) => {
   try {
-    const { estado, cursoId } = req.query;
+    const { estado, cursoId, q, limit } = req.query;
 
-    const estudiantes = await estudianteModel.findAll(estado, cursoId);
+    const estudiantes = await estudianteModel.findAll({
+      estado: estado || null,
+      cursoId: cursoId || null,
+      q: q?.trim() || null,
+      limit: limit || null,
+    });
 
     return res.json({
       ok: true,
