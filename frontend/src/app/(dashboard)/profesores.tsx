@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
 import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
 import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 import SparklesIcon from 'react-native-heroicons/outline/SparklesIcon';
+import MagnifyingGlassIcon from 'react-native-heroicons/outline/MagnifyingGlassIcon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
@@ -57,6 +58,7 @@ export default function ProfesoresScreen() {
   const [editing, setEditing] = useState<Profesor | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
 
   const loadData = useCallback(async () => {
     try {
@@ -149,6 +151,27 @@ export default function ProfesoresScreen() {
     );
   };
 
+  const filteredProfesores = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return profesores;
+    return profesores.filter((prof) =>
+      `${prof.nombres} ${prof.apellidos} ${prof.documento} ${prof.especialidad ?? ''}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [profesores, search]);
+
+  const stats = useMemo(() => {
+    const activos = profesores.filter((prof) => prof.estado === 'activo').length;
+    const conCorreo = profesores.filter((prof) => Boolean(prof.correo)).length;
+    return {
+      total: profesores.length,
+      activos,
+      inactivos: profesores.length - activos,
+      conCorreo,
+    };
+  }, [profesores]);
+
   return (
     <ScreenShell contentStyle={styles.shellContent}>
       <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -186,9 +209,7 @@ export default function ProfesoresScreen() {
             }}
           />
         ) : (
-          <FlatList
-            data={profesores}
-            keyExtractor={(item) => String(item.id)}
+          <ScrollView
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -198,59 +219,77 @@ export default function ProfesoresScreen() {
                 }}
               />
             }
-            ListEmptyComponent={
-              <ThemedView type="backgroundElement" style={styles.emptyState}>
-                <ThemedText style={styles.emptyText}>No hay profesores registrados.</ThemedText>
-              </ThemedView>
-            }
-            renderItem={({ item }) => (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardHeading}>
-                    <ThemedText type="subtitle" style={[styles.cardName, { color: theme.text }]}>
-                      {item.nombres} {item.apellidos}
-                    </ThemedText>
-                    <ThemedText type="small" style={[styles.muted, { color: theme.textSecondary }]}>
-                      {item.especialidad ?? 'Sin especialidad'}
-                    </ThemedText>
-                  </View>
-                  <ThemedText
-                    type="small"
-                    style={[
-                      styles.statusPill,
-                      { backgroundColor: `${theme.accent}22`, color: theme.accent },
-                    ]}>
-                    {item.estado}
-                  </ThemedText>
-                </View>
-                <View style={styles.detailRow}>
-                  <Detail label="Documento" value={item.documento} />
-                  {item.correo ? <Detail label="Correo" value={item.correo} /> : null}
-                </View>
-                <View style={styles.actions}>
+            contentContainerStyle={styles.panel}>
+            <View style={styles.statsGrid}>
+              <StatCard label="Total docentes" value={stats.total} />
+              <StatCard label="Activos" value={stats.activos} tone="ok" />
+              <StatCard label="Inactivos" value={stats.inactivos} tone="danger" />
+              <StatCard label="Con correo" value={stats.conCorreo} />
+            </View>
+
+            <View style={[styles.searchBox, { borderColor: theme.border }]}>
+              <MagnifyingGlassIcon width={16} height={16} color={theme.textSecondary} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Buscar docente, documento o especialidad"
+                placeholderTextColor={theme.textSecondary}
+                style={[styles.searchInput, { color: theme.text }]}
+              />
+            </View>
+
+            <ThemedView type="backgroundElement" style={[styles.table, { borderColor: theme.border }]}>
+              <View style={[styles.tableHeader, { borderBottomColor: theme.border }]}>
+                <ThemedText style={styles.headName}>DOCENTE</ThemedText>
+                <ThemedText style={styles.headCell}>DOCUMENTO</ThemedText>
+                <ThemedText style={styles.headCell}>ESPECIALIDAD</ThemedText>
+                <ThemedText style={styles.headCell}>ESTADO</ThemedText>
+              </View>
+              {filteredProfesores.length === 0 ? (
+                <ThemedText style={styles.emptyText}>No hay profesores para mostrar.</ThemedText>
+              ) : (
+                filteredProfesores.map((item) => (
                   <Pressable
+                    key={item.id}
                     onPress={() => openEdit(item)}
+                    onLongPress={() => handleDelete(item)}
                     style={({ pressed }) => [
-                      styles.iconBtn,
-                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                      styles.tableRow,
+                      { borderBottomColor: theme.border },
                       pressed && styles.pressed,
                     ]}>
-                    <PencilSquareIcon width={18} height={18} color={theme.primary} />
+                    <View style={styles.teacherCell}>
+                      <View style={[styles.avatar, { backgroundColor: `${theme.primary}30` }]}>
+                        <ThemedText style={[styles.avatarText, { color: theme.primaryText }]}>
+                          {getInitials(item.nombres, item.apellidos)}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.teacherInfo}>
+                        <ThemedText style={[styles.teacherName, { color: theme.text }]}>
+                          {item.nombres} {item.apellidos}
+                        </ThemedText>
+                        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                          {item.correo ?? 'Sin correo'}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <ThemedText style={[styles.tableCell, { color: theme.text }]}>{item.documento}</ThemedText>
+                    <ThemedText style={[styles.tableCell, { color: theme.text }]}>{item.especialidad ?? 'General'}</ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.badge,
+                        {
+                          backgroundColor: item.estado === 'activo' ? `${theme.accent}22` : `${theme.danger}16`,
+                          color: item.estado === 'activo' ? theme.accent : theme.danger,
+                        },
+                      ]}>
+                      {item.estado}
+                    </ThemedText>
                   </Pressable>
-                  <Pressable
-                    onPress={() => handleDelete(item)}
-                    style={({ pressed }) => [
-                      styles.iconBtn,
-                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
-                      pressed && styles.pressed,
-                    ]}>
-                    <TrashIcon width={18} height={18} color={theme.danger} />
-                  </Pressable>
-                </View>
-              </ThemedView>
-            )}
-            contentContainerStyle={styles.list}
-          />
+                ))
+              )}
+            </ThemedView>
+          </ScrollView>
         )}
 
         <Modal visible={modalVisible} animationType="slide" transparent>
@@ -346,6 +385,24 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+function getInitials(nombres: string, apellidos: string) {
+  return `${nombres.charAt(0)}${apellidos.charAt(0)}`.toUpperCase();
+}
+
+function StatCard({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'danger' }) {
+  const theme = useTheme();
+  const color = tone === 'ok' ? theme.accent : tone === 'danger' ? theme.danger : theme.text;
+
+  return (
+    <ThemedView type="backgroundElement" style={[styles.statCard, { borderColor: theme.border }]}>
+      <ThemedText type="small" style={[styles.statLabel, { color: theme.textSecondary }]}>
+        {label}
+      </ThemedText>
+      <ThemedText style={[styles.statValue, { color }]}>{value}</ThemedText>
+    </ThemedView>
+  );
+}
+
 const styles = StyleSheet.create({
   shellContent: { gap: Spacing.three },
   hero: {
@@ -399,6 +456,62 @@ const styles = StyleSheet.create({
   heroSubtitle: { lineHeight: 20 },
   page: { gap: Spacing.three },
   list: { gap: Spacing.three, paddingBottom: Spacing.five },
+  panel: { gap: Spacing.three, paddingBottom: Spacing.five },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  statCard: {
+    flex: 1,
+    minWidth: 130,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+  },
+  statLabel: { fontSize: 12, fontWeight: '500' },
+  statValue: { fontSize: 24, fontWeight: '600', marginTop: 4 },
+  searchBox: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
+  },
+  searchInput: { flex: 1, paddingVertical: Spacing.two },
+  table: { borderWidth: 1, borderRadius: Spacing.two, overflow: 'hidden' },
+  tableHeader: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.two,
+  },
+  headName: { flex: 2, fontSize: 11, fontWeight: '600', opacity: 0.55 },
+  headCell: { flex: 1, fontSize: 11, fontWeight: '600', opacity: 0.55 },
+  tableRow: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.two,
+    gap: Spacing.two,
+  },
+  teacherCell: { flex: 2, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, minWidth: 0 },
+  avatar: { width: 32, height: 32, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 11, fontWeight: '600' },
+  teacherInfo: { flex: 1, minWidth: 0 },
+  teacherName: { fontWeight: '500' },
+  tableCell: { flex: 1, fontWeight: '500' },
+  badge: {
+    flex: 1,
+    maxWidth: 86,
+    textAlign: 'center',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.two,
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
   card: {
     padding: Spacing.three,
     borderRadius: Spacing.three,

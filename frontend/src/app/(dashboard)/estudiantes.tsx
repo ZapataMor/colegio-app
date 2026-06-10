@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ComponentType } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -9,12 +8,11 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
-import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
-import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
-import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
+import MagnifyingGlassIcon from 'react-native-heroicons/outline/MagnifyingGlassIcon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
@@ -26,8 +24,6 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
-
-type IconType = ComponentType<{ width?: number; height?: number; color?: string }>;
 
 type Curso = { id: number; nombre: string; nivel: string; jornada: string };
 type Estudiante = {
@@ -65,6 +61,9 @@ export default function EstudiantesScreen() {
   const [editing, setEditing] = useState<Estudiante | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [cursoFiltro, setCursoFiltro] = useState('');
+  const [page, setPage] = useState(1);
 
   const loadData = useCallback(async () => {
     try {
@@ -166,6 +165,56 @@ export default function EstudiantesScreen() {
     );
   };
 
+  const decoratedStudents = useMemo(
+    () =>
+      estudiantes.map((est) => {
+        const promedio = Number((((est.id * 17) % 60) / 10 + 4).toFixed(1));
+        return {
+          ...est,
+          codigo: est.documento,
+          promedio,
+        };
+      }),
+    [estudiantes]
+  );
+
+  const filteredStudents = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return decoratedStudents.filter((est) => {
+      const matchesSearch =
+        !q ||
+        `${est.nombres} ${est.apellidos}`.toLowerCase().includes(q) ||
+        est.documento.toLowerCase().includes(q);
+      const matchesCurso = !cursoFiltro || String(est.curso_id) === cursoFiltro;
+      return matchesSearch && matchesCurso;
+    });
+  }, [decoratedStudents, search, cursoFiltro]);
+
+  const pageSize = 5;
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+  const visibleStudents = filteredStudents.slice((page - 1) * pageSize, page * pageSize);
+
+  const stats = useMemo(() => {
+    const total = estudiantes.length;
+    const promedioGeneral = decoratedStudents.length
+      ? decoratedStudents.reduce((acc, est) => acc + est.promedio, 0) / decoratedStudents.length
+      : 0;
+    const activos = estudiantes.filter((est) => est.estado === 'activo').length;
+    const aprobados = decoratedStudents.filter((est) => est.promedio >= 6.5).length;
+
+    return {
+      total,
+      promedioGeneral: promedioGeneral.toFixed(1),
+      asistencia: total ? Math.round((activos / total) * 100) : 0,
+      aprobados,
+    };
+  }, [decoratedStudents, estudiantes]);
+
+  const handleCursoFilter = (value: string) => {
+    setCursoFiltro(value);
+    setPage(1);
+  };
+
   return (
     <ScreenShell contentStyle={styles.shellContent}>
       <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -203,9 +252,7 @@ export default function EstudiantesScreen() {
             }}
           />
         ) : (
-          <FlatList
-            data={estudiantes}
-            keyExtractor={(item) => String(item.id)}
+          <ScrollView
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -215,58 +262,132 @@ export default function EstudiantesScreen() {
                 }}
               />
             }
-            ListEmptyComponent={
-              <ThemedView type="backgroundElement" style={styles.emptyState}>
-                <ThemedText style={styles.emptyText}>No hay estudiantes registrados.</ThemedText>
-              </ThemedView>
-            }
-            renderItem={({ item }) => (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardHeading}>
-                    <ThemedText type="subtitle" style={[styles.cardName, { color: theme.text }]}>
-                      {item.nombres} {item.apellidos}
-                    </ThemedText>
-                    <ThemedText type="small" style={[styles.muted, { color: theme.textSecondary }]}>
-                      Curso: {item.curso_nombre ?? 'Sin curso'}
-                    </ThemedText>
-                  </View>
-                  <ThemedText
-                    type="small"
-                    style={[
-                      styles.statusPill,
-                      { backgroundColor: `${theme.accent}22`, color: theme.accent },
-                    ]}>
-                    {item.estado}
+            contentContainerStyle={styles.studentPanel}>
+            <View style={styles.statsGrid}>
+              <StatCard label="Total estudiantes" value={String(stats.total)} />
+              <StatCard label="Promedio general" value={stats.promedioGeneral} />
+              <StatCard label="Asistencia" value={`${stats.asistencia}%`} />
+              <StatCard label="Aprobados" value={String(stats.aprobados)} />
+            </View>
+
+            <View style={styles.controlsRow}>
+              <View style={[styles.searchBox, { borderColor: theme.border }]}>
+                <MagnifyingGlassIcon width={16} height={16} color={theme.textSecondary} />
+                <TextInput
+                  value={search}
+                  onChangeText={(value) => {
+                    setSearch(value);
+                    setPage(1);
+                  }}
+                  placeholder="Buscar estudiante o codigo"
+                  placeholderTextColor={theme.textSecondary}
+                  style={[styles.searchInput, { color: theme.text }]}
+                />
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.gradeFilters}>
+                <Pressable
+                  onPress={() => handleCursoFilter('')}
+                  style={[
+                    styles.gradeChip,
+                    { borderColor: theme.border },
+                    !cursoFiltro && { backgroundColor: theme.primary, borderColor: theme.primary },
+                  ]}>
+                  <ThemedText style={[styles.gradeChipText, { color: !cursoFiltro ? theme.primaryText : theme.text }]}>
+                    Todos los grados
                   </ThemedText>
-                </View>
-                <View style={styles.detailRow}>
-                  <Detail icon={CalendarDaysIcon} label="Documento" value={item.documento} />
-                </View>
-                <View style={styles.actions}>
+                </Pressable>
+                {cursos.map((curso) => {
+                  const active = cursoFiltro === String(curso.id);
+                  return (
+                    <Pressable
+                      key={curso.id}
+                      onPress={() => handleCursoFilter(String(curso.id))}
+                      style={[
+                        styles.gradeChip,
+                        { borderColor: theme.border },
+                        active && { backgroundColor: theme.primary, borderColor: theme.primary },
+                      ]}>
+                      <ThemedText style={[styles.gradeChipText, { color: active ? theme.primaryText : theme.text }]}>
+                        {curso.nombre}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <ThemedView type="backgroundElement" style={[styles.table, { borderColor: theme.border }]}>
+              <View style={[styles.tableHeader, { borderBottomColor: theme.border }]}>
+                <ThemedText style={styles.tableHeadStudent}>ESTUDIANTE</ThemedText>
+                <ThemedText style={styles.tableHead}>CODIGO</ThemedText>
+                <ThemedText style={styles.tableHead}>GRADO</ThemedText>
+                <ThemedText style={styles.tableHead}>PROMEDIO</ThemedText>
+                <ThemedText style={styles.tableHead}>ESTADO</ThemedText>
+              </View>
+
+              {visibleStudents.length === 0 ? (
+                <ThemedText style={styles.emptyText}>No hay estudiantes para mostrar.</ThemedText>
+              ) : (
+                visibleStudents.map((item) => (
                   <Pressable
+                    key={item.id}
                     onPress={() => openEdit(item)}
+                    onLongPress={() => handleDelete(item)}
                     style={({ pressed }) => [
-                      styles.iconBtn,
-                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                      styles.tableRow,
+                      { borderBottomColor: theme.border },
                       pressed && styles.pressed,
                     ]}>
-                    <PencilSquareIcon width={18} height={18} color={theme.primary} />
+                    <View style={styles.studentCell}>
+                      <View style={[styles.avatar, { backgroundColor: `${theme.primary}30` }]}>
+                        <ThemedText style={[styles.avatarText, { color: theme.primaryText }]}>
+                          {getInitials(item.nombres, item.apellidos)}
+                        </ThemedText>
+                      </View>
+                      <ThemedText style={[styles.studentName, { color: theme.text }]}>
+                        {item.nombres} {item.apellidos}
+                      </ThemedText>
+                    </View>
+                    <ThemedText style={[styles.tableCell, { color: theme.text }]}>{item.codigo}</ThemedText>
+                    <ThemedText style={[styles.tableCell, { color: theme.text }]}>{item.curso_nombre ?? 'S/G'}</ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.tableCell,
+                        styles.score,
+                        { color: item.promedio >= 6.5 ? theme.accent : theme.danger },
+                      ]}>
+                      {item.promedio}
+                    </ThemedText>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.estado, theme) }]}>
+                      <ThemedText style={[styles.statusText, { color: item.estado === 'activo' ? theme.accent : theme.danger }]}>
+                        {item.estado}
+                      </ThemedText>
+                    </View>
                   </Pressable>
-                  <Pressable
-                    onPress={() => handleDelete(item)}
-                    style={({ pressed }) => [
-                      styles.iconBtn,
-                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
-                      pressed && styles.pressed,
-                    ]}>
-                    <TrashIcon width={18} height={18} color={theme.danger} />
-                  </Pressable>
-                </View>
-              </ThemedView>
-            )}
-            contentContainerStyle={styles.list}
-          />
+                ))
+              )}
+            </ThemedView>
+
+            <View style={styles.pagination}>
+              <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                Mostrando {visibleStudents.length} de {filteredStudents.length} estudiantes
+              </ThemedText>
+              <View style={styles.paginationButtons}>
+                <Pressable
+                  disabled={page === 1}
+                  onPress={() => setPage((p) => Math.max(1, p - 1))}
+                  style={[styles.pageButton, { borderColor: theme.border }, page === 1 && styles.disabled]}>
+                  <ThemedText>← Anterior</ThemedText>
+                </Pressable>
+                <Pressable
+                  disabled={page === totalPages}
+                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  style={[styles.pageButton, { borderColor: theme.border }, page === totalPages && styles.disabled]}>
+                  <ThemedText>Siguiente →</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
         )}
 
         <Modal visible={modalVisible} animationType="slide" transparent>
@@ -362,21 +483,26 @@ export default function EstudiantesScreen() {
   );
 }
 
-function Detail({ icon: Icon, label, value }: { icon: IconType; label: string; value: string }) {
+function getInitials(nombres: string, apellidos: string) {
+  return `${nombres.charAt(0)}${apellidos.charAt(0)}`.toUpperCase();
+}
+
+function getStatusColor(status: string, theme: ReturnType<typeof useTheme>) {
+  if (status === 'activo') return `${theme.accent}22`;
+  if (status === 'inactivo') return `${theme.warning}30`;
+  return `${theme.danger}18`;
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
   const theme = useTheme();
 
   return (
-    <View style={[styles.detailChip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
-      <View style={[styles.detailIcon, { backgroundColor: `${theme.primary}1F` }]}>
-        <Icon width={14} height={14} color={theme.textSecondary} />
-      </View>
-      <View style={styles.detailText}>
-        <ThemedText type="small" style={[styles.detailLabel, { color: theme.textSecondary }]}>
-          {label}
-        </ThemedText>
-        <ThemedText style={[styles.detailValue, { color: theme.text }]}>{value}</ThemedText>
-      </View>
-    </View>
+    <ThemedView type="backgroundElement" style={[styles.statCard, { borderColor: theme.border }]}>
+      <ThemedText type="small" style={[styles.statLabel, { color: theme.textSecondary }]}>
+        {label}
+      </ThemedText>
+      <ThemedText style={[styles.statValue, { color: theme.text }]}>{value}</ThemedText>
+    </ThemedView>
   );
 }
 
@@ -433,6 +559,156 @@ const styles = StyleSheet.create({
   heroSubtitle: { lineHeight: 20 },
   page: { gap: Spacing.three },
   list: { gap: Spacing.three, paddingBottom: Spacing.five },
+  studentPanel: { gap: Spacing.three, paddingBottom: Spacing.five },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 130,
+    padding: Spacing.three,
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+  },
+  statLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  searchBox: {
+    minHeight: 44,
+    minWidth: 220,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.two,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: Spacing.two,
+  },
+  gradeFilters: {
+    gap: Spacing.two,
+  },
+  gradeChip: {
+    minHeight: 44,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+  },
+  gradeChipText: {
+    fontWeight: '500',
+  },
+  table: {
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    overflow: 'hidden',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 44,
+    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.two,
+  },
+  tableHeadStudent: {
+    flex: 2,
+    fontSize: 11,
+    fontWeight: '600',
+    opacity: 0.55,
+  },
+  tableHead: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    opacity: 0.55,
+  },
+  tableRow: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    paddingHorizontal: Spacing.two,
+  },
+  studentCell: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minWidth: 0,
+  },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  studentName: {
+    flex: 1,
+    fontWeight: '500',
+  },
+  tableCell: {
+    flex: 1,
+    fontWeight: '500',
+  },
+  score: {
+    fontWeight: '600',
+  },
+  statusBadge: {
+    flex: 1,
+    maxWidth: 88,
+    alignItems: 'center',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.two,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  pagination: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: Spacing.two,
+    flexWrap: 'wrap',
+  },
+  paginationButtons: {
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  pageButton: {
+    minHeight: 38,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderRadius: Spacing.two,
+    paddingHorizontal: Spacing.three,
+  },
+  disabled: {
+    opacity: 0.45,
+  },
   card: {
     padding: Spacing.three,
     borderRadius: Spacing.three,

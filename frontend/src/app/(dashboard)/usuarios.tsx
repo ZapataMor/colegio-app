@@ -106,10 +106,10 @@ function getInitials(nombres: string, apellidos: string) {
 
 function RoleBadge({ rol }: { rol: string }) {
   const colors: Record<string, { bg: string; text: string }> = {
-    administrador: { bg: '#EDE9FE', text: '#6D28D9' },
-    profesor: { bg: '#DBEAFE', text: '#1D4ED8' },
-    estudiante: { bg: '#D1FAE5', text: '#047857' },
-    acudiente: { bg: '#FEF3C7', text: '#B45309' },
+    administrador: { bg: '#DDF4FC', text: '#073047' },
+    profesor: { bg: '#EAF5D3', text: '#4D6A12' },
+    estudiante: { bg: '#FEF9B8', text: '#6F6500' },
+    acudiente: { bg: '#FDE1E1', text: '#9A2424' },
   };
   const c = colors[rol] ?? { bg: '#F3F4F6', text: '#374151' };
 
@@ -217,7 +217,9 @@ export default function UsuariosScreen() {
 
   const stats = useMemo(() => {
     const activos = usuarios.filter((u) => u.estado === 'activo').length;
-    return { total: usuarios.length, activos };
+    const bloqueados = usuarios.filter((u) => u.estado === 'bloqueado').length;
+    const rolesUnicos = new Set(usuarios.flatMap((u) => (u.roles || u.rol || '').split(',').map((r) => r.trim()).filter(Boolean))).size;
+    return { total: usuarios.length, activos, bloqueados, rolesUnicos };
   }, [usuarios]);
 
   const openCreate = () => {
@@ -416,6 +418,22 @@ export default function UsuariosScreen() {
               </ThemedText>
               <ThemedText type="title" style={[styles.statValue, { color: theme.accent }]}>
                 {stats.activos}
+              </ThemedText>
+            </ThemedView>
+            <ThemedView type="backgroundElement" style={[styles.statCard, { borderColor: theme.border }]}>
+              <ThemedText type="small" style={[styles.statLabel, { color: theme.textSecondary }]}>
+                Bloqueados
+              </ThemedText>
+              <ThemedText type="title" style={[styles.statValue, { color: theme.danger }]}>
+                {stats.bloqueados}
+              </ThemedText>
+            </ThemedView>
+            <ThemedView type="backgroundElement" style={[styles.statCard, { borderColor: theme.border }]}>
+              <ThemedText type="small" style={[styles.statLabel, { color: theme.textSecondary }]}>
+                Roles
+              </ThemedText>
+              <ThemedText type="title" style={[styles.statValue, { color: theme.primary }]}>
+                {stats.rolesUnicos}
               </ThemedText>
             </ThemedView>
           </View>
@@ -648,18 +666,20 @@ const styles = StyleSheet.create({
   helpText: { opacity: 0.65, marginBottom: Spacing.three, lineHeight: 20 },
   statsRow: {
     flexDirection: 'row',
-    gap: Spacing.three,
+    flexWrap: 'wrap',
+    gap: Spacing.two,
     marginBottom: Spacing.three,
   },
   statCard: {
     flex: 1,
+    minWidth: 128,
     padding: Spacing.three,
     borderRadius: Spacing.two,
     gap: Spacing.one,
     borderWidth: 1,
   },
-  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '700' },
-  statValue: { fontSize: 28 },
+  statLabel: { opacity: 0.6, textTransform: 'uppercase', fontSize: 11, fontWeight: '500' },
+  statValue: { fontSize: 24, fontWeight: '600' },
   statValueGreen: { color: '#22C55E' },
   filtersBlock: {
     marginBottom: Spacing.three,
@@ -675,13 +695,13 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    padding: Spacing.two,
+    borderRadius: Spacing.two,
     gap: Spacing.three,
     borderWidth: 1,
     ...Platform.select({
       web: {
-        boxShadow: '0 12px 30px rgba(0,0,0,0.25)',
+        boxShadow: '0 8px 22px rgba(0,0,0,0.12)',
       },
       default: {},
     }),
@@ -693,7 +713,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: { fontWeight: '800', fontSize: 16 },
+  avatarText: { fontWeight: '600', fontSize: 15 },
   cardBody: { flex: 1, gap: 4, minWidth: 0 },
   cardTitleRow: {
     flexDirection: 'row',
@@ -711,7 +731,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 12,
   },
-  roleBadgeText: { fontSize: 11, fontWeight: '700', textTransform: 'capitalize' },
+  roleBadgeText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
   statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -720,7 +740,7 @@ const styles = StyleSheet.create({
   statusActive: { backgroundColor: 'rgba(22,163,74,0.14)' },
   statusInactive: { backgroundColor: 'rgba(220,38,38,0.14)' },
   statusBlocked: { backgroundColor: 'rgba(217,119,6,0.14)' },
-  statusBadgeText: { fontSize: 11, fontWeight: '800', textTransform: 'capitalize' },
+  statusBadgeText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
   cardActions: { flexDirection: 'row', gap: Spacing.two },
   iconBtn: {
     width: 40,

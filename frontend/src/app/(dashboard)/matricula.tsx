@@ -1,31 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ComponentType } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
-import ArrowLeftIcon from 'react-native-heroicons/outline/ArrowLeftIcon';
 import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
-import ClipboardDocumentListIcon from 'react-native-heroicons/outline/ClipboardDocumentListIcon';
-import FunnelIcon from 'react-native-heroicons/outline/FunnelIcon';
+import ClipboardDocumentCheckIcon from 'react-native-heroicons/outline/ClipboardDocumentCheckIcon';
+import DocumentTextIcon from 'react-native-heroicons/outline/DocumentTextIcon';
+import IdentificationIcon from 'react-native-heroicons/outline/IdentificationIcon';
 import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
+import PhoneIcon from 'react-native-heroicons/outline/PhoneIcon';
 import PlusIcon from 'react-native-heroicons/outline/PlusIcon';
 import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 import UserIcon from 'react-native-heroicons/outline/UserIcon';
-import BuildingOffice2Icon from 'react-native-heroicons/outline/BuildingOffice2Icon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
-import { FormField } from '@/components/crud/FormField';
-import { OptionChips } from '@/components/crud/OptionChips';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -34,12 +29,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
 
 type Curso = { id: number; nombre: string; nivel?: string; jornada?: string };
-type Estudiante = {
-  id: number;
-  nombres: string;
-  apellidos: string;
-  documento: string;
-};
+type Estudiante = { id: number; nombres: string; apellidos: string; documento: string };
 type Matricula = {
   id: number;
   estudiante_id: number;
@@ -61,33 +51,36 @@ const emptyForm = {
   cursoId: '',
   anio: ANIO_ACTUAL,
   estado: 'activa',
+  acudiente: '',
+  observaciones: '',
 };
 
+type Tab = 'lista' | 'registro' | 'detalle';
+
 export default function MatriculaScreen() {
-  const router = useRouter();
   const theme = useTheme();
+  const [tab, setTab] = useState<Tab>('lista');
   const [matriculas, setMatriculas] = useState<Matricula[]>([]);
   const [estudiantes, setEstudiantes] = useState<Estudiante[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
+  const [selected, setSelected] = useState<Matricula | null>(null);
+  const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editing, setEditing] = useState<Matricula | null>(null);
-  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [filtroAnio, setFiltroAnio] = useState(ANIO_ACTUAL);
+  const [error, setError] = useState('');
 
   const loadData = useCallback(async () => {
     try {
       setError('');
-      const query = filtroAnio ? `?anio=${filtroAnio}` : '';
       const [matRes, estRes, cursosRes] = await Promise.all([
-        apiFetch<Matricula[]>(`/api/matriculas${query}`),
+        apiFetch<Matricula[]>(`/api/matriculas?anio=${ANIO_ACTUAL}`),
         apiFetch<Estudiante[]>('/api/estudiantes'),
         apiFetch<Curso[]>('/api/cursos'),
       ]);
-      setMatriculas(matRes.data ?? []);
+      const data = matRes.data ?? [];
+      setMatriculas(data);
+      setSelected((current) => current ?? data[0] ?? null);
       setEstudiantes(estRes.data ?? []);
       setCursos(cursosRes.data ?? []);
     } catch (err) {
@@ -96,69 +89,62 @@ export default function MatriculaScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filtroAnio]);
+  }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   const metrics = useMemo(() => {
-    const activas = matriculas.filter((matricula) => matricula.estado === 'activa').length;
+    const activas = matriculas.filter((m) => m.estado === 'activa').length;
+    const retirados = matriculas.filter((m) => m.estado === 'retirada' || m.estado === 'cancelada').length;
     return {
       total: matriculas.length,
       activas,
-      cursos: cursos.length,
+      pendientes: Math.max(matriculas.length - activas - retirados, 0),
+      retirados,
     };
-  }, [matriculas, cursos.length]);
+  }, [matriculas]);
 
-  const openCreate = () => {
-    if (estudiantes.length === 0) {
-      Alert.alert('Sin estudiantes', 'Primero registra estudiantes en el modulo correspondiente.');
-      return;
-    }
-    setEditing(null);
+  const startCreate = () => {
     setForm({
       ...emptyForm,
-      estudianteId: String(estudiantes[0].id),
+      estudianteId: estudiantes[0] ? String(estudiantes[0].id) : '',
       cursoId: cursos[0] ? String(cursos[0].id) : '',
-      anio: filtroAnio || ANIO_ACTUAL,
     });
-    setModalVisible(true);
+    setTab('registro');
   };
 
-  const openEdit = (matricula: Matricula) => {
-    setEditing(matricula);
+  const startEdit = (matricula: Matricula) => {
+    setSelected(matricula);
     setForm({
+      ...emptyForm,
       estudianteId: String(matricula.estudiante_id),
       cursoId: String(matricula.curso_id),
       anio: String(matricula.anio),
       estado: matricula.estado,
     });
-    setModalVisible(true);
+    setTab('registro');
   };
 
   const handleSave = async () => {
     if (!form.estudianteId || !form.cursoId || !form.anio.trim()) {
-      Alert.alert('Validacion', 'Estudiante, curso y ano son obligatorios.');
+      Alert.alert('Validacion', 'Estudiante, curso y periodo son obligatorios.');
       return;
     }
 
     setSaving(true);
     try {
-      const body = {
-        estudianteId: Number(form.estudianteId),
-        cursoId: Number(form.cursoId),
-        anio: Number(form.anio),
-        ...(editing ? { estado: form.estado } : {}),
-      };
-
-      if (editing) {
-        await apiFetch(`/api/matriculas/${editing.id}`, { method: 'PUT', body });
-      } else {
-        await apiFetch('/api/matriculas', { method: 'POST', body });
-      }
-      setModalVisible(false);
+      await apiFetch('/api/matriculas', {
+        method: 'POST',
+        body: {
+          estudianteId: Number(form.estudianteId),
+          cursoId: Number(form.cursoId),
+          anio: Number(form.anio),
+        },
+      });
       await loadData();
+      setTab('lista');
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar.');
     } finally {
@@ -167,90 +153,27 @@ export default function MatriculaScreen() {
   };
 
   const handleDelete = (matricula: Matricula) => {
-    Alert.alert(
-      'Eliminar matricula',
-      `¿Eliminar matricula de ${matricula.estudiante_nombres} ${matricula.estudiante_apellidos} (${matricula.anio})?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiFetch(`/api/matriculas/${matricula.id}`, { method: 'DELETE' });
-              await loadData();
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-            }
-          },
+    Alert.alert('Retirar matricula', `Retirar a ${matricula.estudiante_nombres} ${matricula.estudiante_apellidos}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Retirar',
+        style: 'destructive',
+        onPress: async () => {
+          await apiFetch(`/api/matriculas/${matricula.id}`, { method: 'DELETE' });
+          setSelected(null);
+          await loadData();
         },
-      ]
-    );
+      },
+    ]);
   };
-
-  const aniosFiltro = [
-    { value: ANIO_ACTUAL, label: ANIO_ACTUAL },
-    { value: String(Number(ANIO_ACTUAL) - 1), label: String(Number(ANIO_ACTUAL) - 1) },
-    { value: '', label: 'Todos' },
-  ];
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
-      <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-        <View style={styles.heroGlowA} />
-        <View style={styles.heroGlowB} />
-        <View style={styles.heroTop}>
-          <Pressable
-            style={[styles.backButton, { backgroundColor: theme.surfaceMuted }]}
-            onPress={() => router.replace('/(dashboard)/dashboard')}>
-            <ArrowLeftIcon width={18} height={18} color={theme.text} />
-          </Pressable>
-          <View style={styles.heroTitleBlock}>
-            <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
-              Matriculas
-            </ThemedText>
-            <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
-              Gestion academica
-            </ThemedText>
-            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              Controla inscripciones, filtros y acciones clave desde una vista mas limpia.
-            </ThemedText>
-          </View>
-          <Pressable onPress={openCreate} style={[styles.addButton, { backgroundColor: theme.primary }]}>
-            <PlusIcon width={16} height={16} color={theme.primaryText} />
-            <ThemedText style={[styles.addButtonText, { color: theme.primaryText }]}>Nueva</ThemedText>
-          </Pressable>
-        </View>
-
-        <View style={styles.metricsRow}>
-          <MetricCard icon={ClipboardDocumentListIcon} label="Matriculas" value={metrics.total} />
-          <MetricCard icon={AcademicCapIcon} label="Activas" value={metrics.activas} />
-          <MetricCard icon={BuildingOffice2Icon} label="Cursos" value={metrics.cursos} />
-        </View>
+      <View style={styles.tabs}>
+        <TabButton active={tab === 'lista'} label="Lista" onPress={() => setTab('lista')} />
+        <TabButton active={tab === 'registro'} label="Registro" onPress={startCreate} />
+        <TabButton active={tab === 'detalle'} label="Detalle" onPress={() => setTab('detalle')} />
       </View>
-
-      <ThemedView type="backgroundElement" style={[styles.filterCard, { borderColor: theme.border }]}>
-        <View style={styles.filterHeader}>
-          <View style={styles.filterTitle}>
-            <FunnelIcon width={16} height={16} color={theme.primary} />
-            <ThemedText type="subtitle" style={[styles.filterLabel, { color: theme.text }]}>
-              Filtrar por ano
-            </ThemedText>
-          </View>
-          <ThemedText type="small" style={[styles.filterHint, { color: theme.textSecondary }]}>
-            Vista rapida y responsive
-          </ThemedText>
-        </View>
-        <OptionChips
-          label=""
-          options={aniosFiltro}
-          value={filtroAnio}
-          onChange={(anio) => {
-            setLoading(true);
-            setFiltroAnio(anio);
-          }}
-        />
-      </ThemedView>
 
       {loading ? (
         <SkeletonList />
@@ -262,10 +185,19 @@ export default function MatriculaScreen() {
             loadData();
           }}
         />
+      ) : tab === 'registro' ? (
+        <RegistroView
+          cursos={cursos}
+          estudiantes={estudiantes}
+          form={form}
+          saving={saving}
+          setForm={setForm}
+          onSave={handleSave}
+        />
+      ) : tab === 'detalle' ? (
+        <DetalleView matricula={selected ?? matriculas[0] ?? null} onEdit={startEdit} onDelete={handleDelete} />
       ) : (
-        <FlatList
-          data={matriculas}
-          keyExtractor={(item) => String(item.id)}
+        <ScrollView
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -275,502 +207,361 @@ export default function MatriculaScreen() {
               }}
             />
           }
-          ListEmptyComponent={
-            <ThemedView type="backgroundElement" style={styles.emptyState}>
-              <ThemedText type="subtitle" style={styles.emptyTitle}>
-                No hay matriculas
-              </ThemedText>
-              <ThemedText style={styles.emptyDescription}>
-                {filtroAnio ? `No se encontraron registros para ${filtroAnio}.` : 'Aun no hay registros.'}
-              </ThemedText>
-            </ThemedView>
-          }
-          renderItem={({ item }) => {
-            const estadoEsActivo = item.estado === 'activa';
-            return (
-              <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-                <View style={styles.cardTop}>
-                  <View style={[styles.avatar, { backgroundColor: `${theme.primary}24` }]}>
-                    <UserIcon width={20} height={20} color={theme.primary} />
-                  </View>
-                  <View style={styles.cardHeading}>
-                    <ThemedText type="subtitle" style={[styles.cardName, { color: theme.text }]}>
-                      {item.estudiante_nombres} {item.estudiante_apellidos}
-                    </ThemedText>
-                    <ThemedText type="small" style={[styles.cardMeta, { color: theme.textSecondary }]}>
-                      Documento {item.estudiante_documento}
-                    </ThemedText>
-                  </View>
-                  <View style={[styles.statusPill, estadoEsActivo ? styles.statusActive : styles.statusOther]}>
-                    <ThemedText style={[styles.statusText, estadoEsActivo ? styles.statusTextActive : styles.statusTextOther]}>
-                      {item.estado}
-                    </ThemedText>
-                  </View>
-                </View>
-
-                <View style={styles.detailGrid}>
-                  <DetailChip
-                    icon={CalendarDaysIcon}
-                    label="Ano"
-                    value={String(item.anio)}
-                  />
-                  <DetailChip
-                    icon={BuildingOffice2Icon}
-                    label="Curso"
-                    value={`${item.curso_nombre} · ${item.curso_jornada}`}
-                  />
-                  <DetailChip
-                    icon={ClipboardDocumentListIcon}
-                    label="Nivel"
-                    value={item.curso_nivel}
-                  />
-                </View>
-
-                <View style={styles.actions}>
-                  <Pressable onPress={() => openEdit(item)} style={({ pressed }) => [styles.actionButton, styles.editButton, pressed && styles.pressed]}>
-                    <PencilSquareIcon width={16} height={16} color={theme.primary} />
-                    <ThemedText style={[styles.editText, { color: theme.primary }]}>Editar</ThemedText>
-                  </Pressable>
-                  <Pressable onPress={() => handleDelete(item)} style={({ pressed }) => [styles.actionButton, styles.deleteButton, pressed && styles.pressed]}>
-                    <TrashIcon width={16} height={16} color={theme.danger} />
-                    <ThemedText style={[styles.deleteText, { color: theme.danger }]}>Eliminar</ThemedText>
-                  </Pressable>
-                </View>
-              </ThemedView>
-            );
-          }}
-          contentContainerStyle={styles.list}
-        />
-      )}
-
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <ThemedView style={[styles.modalContent, { borderColor: theme.border }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleRow}>
-                <View style={[styles.modalIcon, { backgroundColor: `${theme.primary}24` }]}>
-                  <ClipboardDocumentListIcon width={18} height={18} color={theme.primary} />
-                </View>
-                <View>
-                  <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
-                    Matricula
-                  </ThemedText>
-                  <ThemedText type="title" style={[styles.modalTitle, { color: theme.text }]}>
-                    {editing ? 'Editar matricula' : 'Nueva matricula'}
-                  </ThemedText>
-                </View>
-              </View>
+          contentContainerStyle={styles.listScreen}>
+          <ThemedView type="backgroundElement" style={styles.summaryCard}>
+            <View style={styles.summaryIcon}>
+              <AcademicCapIcon width={18} height={18} color={theme.primary} />
             </View>
-
-            <ScrollView contentContainerStyle={styles.form}>
-              <OptionChips
-                label="Estudiante"
-                options={estudiantes.map((e) => ({
-                  value: String(e.id),
-                  label: `${e.apellidos} ${e.nombres}`,
-                }))}
-                value={form.estudianteId}
-                onChange={(estudianteId) => setForm((f) => ({ ...f, estudianteId }))}
-              />
-              <OptionChips
-                label="Curso"
-                options={cursos.map((c) => ({
-                  value: String(c.id),
-                  label: c.nombre,
-                }))}
-                value={form.cursoId}
-                onChange={(cursoId) => setForm((f) => ({ ...f, cursoId }))}
-              />
-              <FormField
-                label="Ano"
-                value={form.anio}
-                onChangeText={(anio) => setForm((f) => ({ ...f, anio }))}
-                keyboardType="numeric"
-                placeholder="2026"
-              />
-              {editing ? (
-                <OptionChips
-                  label="Estado"
-                  options={[
-                    { value: 'activa', label: 'Activa' },
-                    { value: 'cancelada', label: 'Cancelada' },
-                    { value: 'finalizada', label: 'Finalizada' },
-                  ]}
-                  value={form.estado}
-                  onChange={(estado) => setForm((f) => ({ ...f, estado }))}
-                />
-              ) : null}
-            </ScrollView>
-
-            <View style={styles.modalActions}>
-              <Pressable
-                onPress={() => setModalVisible(false)}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.cancelBtn,
-                  { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
-                  pressed && styles.pressed,
-                ]}
-                disabled={saving}>
-                <ThemedText style={[styles.cancelBtnText, { color: theme.text }]}>Cancelar</ThemedText>
-              </Pressable>
-              <Pressable
-                onPress={handleSave}
-                style={({ pressed }) => [
-                  styles.modalButton,
-                  styles.saveBtn,
-                  { backgroundColor: theme.primary },
-                  pressed && styles.pressed,
-                ]}
-                disabled={saving}>
-                {saving ? (
-                  <ActivityIndicator color={theme.primaryText} />
-                ) : (
-                  <ThemedText style={[styles.saveBtnText, { color: theme.primaryText }]}>Guardar</ThemedText>
-                )}
-              </Pressable>
+            <View>
+              <ThemedText style={styles.summaryTitle}>Matriculas {ANIO_ACTUAL}</ThemedText>
+              <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                Gestion academica - Periodo activo
+              </ThemedText>
             </View>
           </ThemedView>
-        </View>
-      </Modal>
+
+          <View style={styles.metricsGrid}>
+            <Metric label="Total" value={metrics.total} />
+            <Metric label="Activas" value={metrics.activas} tone="ok" />
+            <Metric label="Pendientes" value={metrics.pendientes} tone="warn" />
+            <Metric label="Retirados" value={metrics.retirados} tone="danger" />
+          </View>
+
+          <ThemedText type="small" style={styles.sectionLabel}>
+            RECIENTES
+          </ThemedText>
+          {matriculas.map((matricula, index) => (
+            <MatriculaItem
+              key={matricula.id}
+              index={index}
+              matricula={matricula}
+              onPress={() => {
+                setSelected(matricula);
+                setTab('detalle');
+              }}
+            />
+          ))}
+
+          <Pressable onPress={startCreate} style={styles.newButton}>
+            <PlusIcon width={16} height={16} color="#111" />
+            <ThemedText style={styles.newButtonText}>Nueva matricula</ThemedText>
+          </Pressable>
+        </ScrollView>
+      )}
     </ScreenShell>
   );
 }
 
-type IconType = ComponentType<{ width?: number; height?: number; color?: string }>;
-
-function MetricCard({ icon: Icon, label, value }: { icon: IconType; label: string; value: number }) {
+function TabButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
   const theme = useTheme();
+  return (
+    <Pressable onPress={onPress} style={[styles.tabButton, active && { backgroundColor: theme.primary }]}>
+      <ThemedText style={[styles.tabText, active && { color: theme.primaryText }]}>{label}</ThemedText>
+    </Pressable>
+  );
+}
 
+function Metric({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'warn' | 'danger' }) {
+  const theme = useTheme();
+  const color = tone === 'ok' ? theme.accent : tone === 'danger' ? theme.danger : tone === 'warn' ? '#B86B00' : theme.text;
   return (
     <ThemedView type="backgroundElement" style={styles.metricCard}>
-      <View style={[styles.metricIcon, { backgroundColor: `${theme.primary}24` }]}>
-        <Icon width={18} height={18} color={theme.primary} />
-      </View>
-      <ThemedText type="small" style={[styles.metricLabel, { color: theme.textSecondary }]}>
-        {label}
-      </ThemedText>
-      <ThemedText style={[styles.metricValue, { color: theme.text }]}>{value}</ThemedText>
+      <ThemedText type="small" style={styles.metricLabel}>{label}</ThemedText>
+      <ThemedText style={[styles.metricValue, { color }]}>{value}</ThemedText>
     </ThemedView>
   );
 }
 
-function DetailChip({ icon: Icon, label, value }: { icon: IconType; label: string; value: string }) {
+function MatriculaItem({ matricula, index, onPress }: { matricula: Matricula; index: number; onPress: () => void }) {
   const theme = useTheme();
+  const percent = [100, 60, 30][index % 3];
+  const colors = [theme.accent, '#B86B00', theme.primary];
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.itemCard, pressed && styles.pressed]}>
+      <View style={[styles.avatar, { backgroundColor: `${theme.primary}30` }]}>
+        <ThemedText style={[styles.avatarText, { color: theme.primaryText }]}>
+          {`${matricula.estudiante_nombres[0] ?? ''}${matricula.estudiante_apellidos[0] ?? ''}`.toUpperCase()}
+        </ThemedText>
+      </View>
+      <View style={styles.itemBody}>
+        <View style={styles.itemTop}>
+          <ThemedText style={styles.itemName}>
+            {matricula.estudiante_nombres} {matricula.estudiante_apellidos}
+          </ThemedText>
+          <Status estado={matricula.estado} />
+        </View>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {matricula.curso_nombre} - Mat. #{matricula.anio}-{String(matricula.id).padStart(3, '0')}
+        </ThemedText>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressBar, { width: `${percent}%`, backgroundColor: colors[index % 3] }]} />
+        </View>
+        <ThemedText type="small" style={styles.progressText}>{percent === 100 ? 'Completa' : `${percent}%`}</ThemedText>
+      </View>
+    </Pressable>
+  );
+}
+
+function RegistroView({
+  cursos,
+  estudiantes,
+  form,
+  saving,
+  setForm,
+  onSave,
+}: {
+  cursos: Curso[];
+  estudiantes: Estudiante[];
+  form: typeof emptyForm;
+  saving: boolean;
+  setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
+  onSave: () => void;
+}) {
+  const theme = useTheme();
+  return (
+    <ScrollView contentContainerStyle={styles.formScreen}>
+      <ThemedText style={styles.formTitle}>Nueva matricula</ThemedText>
+      <Field label="Estudiante" value={form.estudianteId} placeholder="Buscar estudiante..." onChangeText={(estudianteId) => setForm((f) => ({ ...f, estudianteId }))} />
+      <SelectChips
+        label="Curso"
+        options={cursos.map((c) => ({ value: String(c.id), label: c.nombre }))}
+        value={form.cursoId}
+        onChange={(cursoId) => setForm((f) => ({ ...f, cursoId }))}
+      />
+      <Field label="Periodo academico" value={form.anio} onChangeText={(anio) => setForm((f) => ({ ...f, anio }))} />
+      <SelectChips
+        label="Estado inicial"
+        options={[
+          { value: 'activa', label: 'Activa' },
+          { value: 'pendiente', label: 'Pendiente' },
+          { value: 'condicional', label: 'Condicional' },
+        ]}
+        value={form.estado}
+        onChange={(estado) => setForm((f) => ({ ...f, estado }))}
+      />
+      <Field label="Acudiente" value={form.acudiente} placeholder="Nombre del acudiente" onChangeText={(acudiente) => setForm((f) => ({ ...f, acudiente }))} />
+      <Field label="Observaciones" value={form.observaciones} placeholder="Opcional..." multiline onChangeText={(observaciones) => setForm((f) => ({ ...f, observaciones }))} />
+      <Pressable onPress={onSave} disabled={saving || estudiantes.length === 0} style={[styles.saveButton, { borderColor: theme.border }]}>
+        {saving ? <ActivityIndicator color={theme.primaryText} /> : <ThemedText style={styles.saveText}>Guardar matricula</ThemedText>}
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function DetalleView({
+  matricula,
+  onEdit,
+  onDelete,
+}: {
+  matricula: Matricula | null;
+  onEdit: (matricula: Matricula) => void;
+  onDelete: (matricula: Matricula) => void;
+}) {
+  const theme = useTheme();
+  if (!matricula) return <ThemedText>No hay matricula seleccionada.</ThemedText>;
 
   return (
-    <View style={[styles.detailChip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
-      <View style={[styles.detailIcon, { backgroundColor: `${theme.primary}1F` }]}>
-        <Icon width={14} height={14} color={theme.textSecondary} />
+    <ScrollView contentContainerStyle={styles.detailScreen}>
+      <View style={styles.detailHeader}>
+        <View style={[styles.bigAvatar, { backgroundColor: `${theme.primary}30` }]}>
+          <ThemedText style={[styles.avatarText, { color: theme.primaryText }]}>
+            {`${matricula.estudiante_nombres[0] ?? ''}${matricula.estudiante_apellidos[0] ?? ''}`.toUpperCase()}
+          </ThemedText>
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText style={styles.detailName}>
+            {matricula.estudiante_nombres} {matricula.estudiante_apellidos}
+          </ThemedText>
+          <ThemedText type="small">Mat. #{matricula.anio}-{String(matricula.id).padStart(3, '0')} - {matricula.curso_nombre}</ThemedText>
+        </View>
+        <Status estado={matricula.estado} />
       </View>
-      <View style={styles.detailText}>
-        <ThemedText type="small" style={[styles.detailLabel, { color: theme.textSecondary }]}>
-          {label}
-        </ThemedText>
-        <ThemedText style={[styles.detailValue, { color: theme.text }]}>{value}</ThemedText>
+
+      <View style={styles.detailGrid}>
+        <Info icon={CalendarDaysIcon} label="Periodo" value={`${matricula.anio} - I`} />
+        <Info icon={IdentificationIcon} label="Documento" value={matricula.estudiante_documento} />
+        <Info icon={UserIcon} label="Acudiente" value="M. Torres" />
+        <Info icon={PhoneIcon} label="Telefono" value="315 000 0001" />
+      </View>
+
+      <ThemedText type="small" style={styles.sectionLabel}>HISTORIAL</ThemedText>
+      <Timeline icon={ClipboardDocumentCheckIcon} title="Matricula confirmada" date="12 ene 2025" />
+      <Timeline icon={DocumentTextIcon} title="Documentos entregados" date="10 ene 2025" note="Paz y salvo, fotos, boletin anterior." />
+      <Timeline icon={CalendarDaysIcon} title="Solicitud iniciada" date="8 ene 2025" />
+
+      <View style={styles.detailActions}>
+        <Pressable onPress={() => onEdit(matricula)} style={[styles.detailButton, { borderColor: theme.border }]}>
+          <PencilSquareIcon width={16} height={16} color={theme.text} />
+          <ThemedText>Editar</ThemedText>
+        </Pressable>
+        <Pressable onPress={() => onDelete(matricula)} style={[styles.detailButton, styles.retireButton]}>
+          <TrashIcon width={16} height={16} color={theme.danger} />
+          <ThemedText style={{ color: theme.danger }}>Retirar</ThemedText>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.field}>
+      <ThemedText type="small" style={styles.fieldLabel}>{label}</ThemedText>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={theme.textSecondary}
+        multiline={multiline}
+        style={[styles.input, multiline && styles.textArea, { borderColor: theme.border, color: theme.text }]}
+      />
+    </View>
+  );
+}
+
+function SelectChips({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={styles.field}>
+      <ThemedText type="small" style={styles.fieldLabel}>{label}</ThemedText>
+      <View style={styles.chips}>
+        {options.map((option) => {
+          const active = option.value === value;
+          return (
+            <Pressable key={option.value} onPress={() => onChange(option.value)} style={[styles.chip, { borderColor: active ? theme.primary : theme.border }, active && { backgroundColor: `${theme.primary}28` }]}>
+              <ThemedText style={styles.chipText}>{option.label}</ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function Status({ estado }: { estado: string }) {
+  const theme = useTheme();
+  const active = estado === 'activa';
+  return (
+    <View style={[styles.status, { backgroundColor: active ? `${theme.accent}22` : `${theme.warning}30` }]}>
+      <ThemedText style={[styles.statusTextSmall, { color: active ? theme.accent : '#B86B00' }]}>
+        {active ? 'Activa' : estado}
+      </ThemedText>
+    </View>
+  );
+}
+
+function Info({ icon: Icon, label, value }: { icon: typeof CalendarDaysIcon; label: string; value: string }) {
+  const theme = useTheme();
+  return (
+    <ThemedView type="backgroundElement" style={styles.infoCard}>
+      <Icon width={14} height={14} color={theme.textSecondary} />
+      <View>
+        <ThemedText type="small" style={styles.infoLabel}>{label}</ThemedText>
+        <ThemedText style={styles.infoValue}>{value}</ThemedText>
+      </View>
+    </ThemedView>
+  );
+}
+
+function Timeline({ icon: Icon, title, date, note }: { icon: typeof CalendarDaysIcon; title: string; date: string; note?: string }) {
+  const theme = useTheme();
+  return (
+    <View style={styles.timeline}>
+      <View style={[styles.timelineIcon, { borderColor: theme.primary }]}>
+        <Icon width={12} height={12} color={theme.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={styles.timelineTitle}>{title}</ThemedText>
+        <ThemedText type="small">{date}</ThemedText>
+        {note ? <ThemedView type="backgroundElement" style={styles.note}><ThemedText type="small">{note}</ThemedText></ThemedView> : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  shellContent: {
-    gap: Spacing.three,
-  },
-  hero: {
-    position: 'relative',
-    overflow: 'hidden',
-    padding: Spacing.four,
-    borderRadius: Spacing.three,
+  shellContent: { gap: Spacing.two },
+  tabs: { flexDirection: 'row', gap: Spacing.two },
+  tabButton: {
+    flex: 1,
+    minHeight: 34,
     borderWidth: 1,
-    gap: Spacing.three,
-  },
-  heroGlowA: {
-    position: 'absolute',
-    top: -70,
-    right: -30,
-    width: 180,
-    height: 180,
-    borderRadius: 999,
-    backgroundColor: '#79D0F2',
-    opacity: 0.12,
-  },
-  heroGlowB: {
-    position: 'absolute',
-    bottom: -60,
-    left: -50,
-    width: 120,
-    height: 120,
-    borderRadius: 999,
-    backgroundColor: '#79D0F2',
-    opacity: 0.08,
-  },
-  heroTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.three,
-    zIndex: 1,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    borderColor: '#B8BEC8',
+    borderRadius: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitleBlock: {
-    flex: 1,
-    gap: 4,
-  },
-  kicker: {
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  heroTitle: {
-  },
-  heroSubtitle: {
-    lineHeight: 20,
-    maxWidth: 540,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderRadius: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  addButtonText: {
-    fontWeight: '800',
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-    zIndex: 1,
-  },
-  metricCard: {
-    flex: 1,
-    padding: Spacing.three,
-    borderRadius: Spacing.two,
-    gap: 4,
-  },
-  metricIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  metricLabel: {
-    fontWeight: '700',
-  },
-  metricValue: {
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  filterCard: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
-    borderWidth: 1,
-  },
-  filterHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  filterTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  filterLabel: {
-  },
-  filterHint: {},
-  list: {
-    gap: Spacing.three,
-    paddingBottom: Spacing.six,
-  },
-  card: {
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-    gap: Spacing.three,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowOffset: { width: 0, height: 10 },
-    shadowRadius: 24,
-    elevation: 2,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing.two,
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardHeading: {
-    flex: 1,
-    gap: 3,
-  },
-  cardName: {
-  },
-  cardMeta: {},
-  statusPill: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 6,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  statusActive: {
-    backgroundColor: 'rgba(22, 163, 74, 0.14)',
-  },
-  statusOther: {
-    backgroundColor: 'rgba(217, 119, 6, 0.14)',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  statusTextActive: {
-    color: '#22C55E',
-  },
-  statusTextOther: {
-    color: '#F59E0B',
-  },
-  detailGrid: {
-    gap: Spacing.two,
-  },
-  detailChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    padding: Spacing.two,
-    borderRadius: Spacing.two,
-    borderWidth: 1,
-  },
-  detailIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  detailText: {
-    flex: 1,
-    gap: 2,
-  },
-  detailLabel: {
-    fontWeight: '700',
-  },
-  detailValue: {
-    fontWeight: '600',
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  actionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: Spacing.three,
-    borderRadius: Spacing.two,
-  },
-  editButton: {
-    backgroundColor: 'rgba(37, 99, 235, 0.12)',
-  },
-  editText: {
-    fontWeight: '800',
-  },
-  deleteButton: {
-    backgroundColor: 'rgba(220, 38, 38, 0.12)',
-  },
-  deleteText: {
-    fontWeight: '800',
-  },
-  pressed: {
-    opacity: 0.82,
-  },
-  emptyState: {
-    padding: Spacing.four,
-    borderRadius: Spacing.three,
-    gap: Spacing.two,
-    alignItems: 'center',
-  },
-  emptyTitle: {
-  },
-  emptyDescription: {
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 900,
-    maxHeight: '92%',
-    padding: Spacing.four,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: Spacing.three,
-  },
-  modalHeader: {
-    paddingBottom: Spacing.two,
-  },
-  modalTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  modalIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-  },
-  form: {
-    gap: Spacing.three,
-    paddingBottom: Spacing.three,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  modalButton: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 48,
-    borderRadius: Spacing.two,
-  },
-  cancelBtn: {
-    borderWidth: 1,
-  },
-  cancelBtnText: {
-    fontWeight: '800',
-  },
-  saveBtn: {},
-  saveBtnText: {
-    fontWeight: '900',
-  },
+  tabText: { fontWeight: '500', fontSize: 13 },
+  listScreen: { gap: Spacing.two, paddingBottom: Spacing.five },
+  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three, borderRadius: 7 },
+  summaryIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(121,208,242,0.22)' },
+  summaryTitle: { fontSize: 18, fontWeight: '600' },
+  metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  metricCard: { width: '48%', padding: Spacing.two, borderRadius: 6 },
+  metricLabel: { fontSize: 11 },
+  metricValue: { fontSize: 22, fontWeight: '800' },
+  sectionLabel: { fontWeight: '500', opacity: 0.6, letterSpacing: 0.6 },
+  itemCard: { flexDirection: 'row', gap: Spacing.two, padding: Spacing.two, borderWidth: 1, borderColor: '#D7D7D7', borderRadius: 8 },
+  avatar: { width: 34, height: 34, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  bigAvatar: { width: 42, height: 42, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontWeight: '500', fontSize: 12 },
+  itemBody: { flex: 1, gap: 4 },
+  itemTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.two },
+  itemName: { fontWeight: '500' },
+  status: { borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 3 },
+  statusTextSmall: { fontSize: 10, fontWeight: '500' },
+  progressTrack: { height: 4, borderRadius: 999, backgroundColor: '#EEECE5', overflow: 'hidden', marginTop: 8 },
+  progressBar: { height: 4, borderRadius: 999 },
+  progressText: { alignSelf: 'flex-end', fontSize: 10, fontWeight: '500' },
+  newButton: { minHeight: 36, borderWidth: 1, borderColor: '#B8BEC8', borderRadius: 5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  newButtonText: { fontWeight: '500' },
+  formScreen: { gap: Spacing.two, paddingBottom: Spacing.five },
+  formTitle: { fontWeight: '600', fontSize: 16, marginVertical: Spacing.two },
+  field: { gap: 4 },
+  fieldLabel: { fontWeight: '500', fontSize: 12 },
+  input: { minHeight: 42, borderWidth: 1, borderRadius: 6, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
+  textArea: { minHeight: 76, textAlignVertical: 'top' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 5 },
+  chipText: { fontSize: 12, fontWeight: '500' },
+  saveButton: { minHeight: 44, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.two },
+  saveText: { fontWeight: '500' },
+  detailScreen: { gap: Spacing.three, paddingBottom: Spacing.five },
+  detailHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  detailName: { fontSize: 18, fontWeight: '600' },
+  detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  infoCard: { width: '48%', flexDirection: 'row', gap: Spacing.two, padding: Spacing.two, borderRadius: 6 },
+  infoLabel: { fontSize: 10, fontWeight: '500' },
+  infoValue: { fontWeight: '500', fontSize: 12 },
+  timeline: { flexDirection: 'row', gap: Spacing.two },
+  timelineIcon: { width: 18, height: 18, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  timelineTitle: { fontWeight: '500' },
+  note: { marginTop: 4, padding: Spacing.two, borderRadius: 5 },
+  detailActions: { flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two },
+  detailButton: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  retireButton: { borderColor: '#F25C5C', backgroundColor: 'rgba(242,92,92,0.10)' },
+  pressed: { opacity: 0.75 },
 });

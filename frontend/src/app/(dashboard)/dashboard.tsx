@@ -46,7 +46,13 @@ export default function DashboardScreen() {
   const admin = isAdmin(session.rol);
   const professor = isProfessor(session.rol);
   const modules = getModulesForRole(session.rol);
-  const sectionTitle = professor ? 'Opciones del docente' : 'Modulos disponibles';
+  const sectionTitle = professor
+    ? 'Opciones del docente'
+    : session.rol === 'estudiante'
+      ? 'Opciones del estudiante'
+      : session.rol === 'acudiente'
+        ? 'Opciones del acudiente'
+        : 'Modulos disponibles';
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
@@ -90,7 +96,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {admin || professor ? (
+        {modules.length > 0 ? (
           <View style={styles.modulesWrap}>
             <ThemedText type="subtitle" style={styles.sectionTitle}>
               {sectionTitle}

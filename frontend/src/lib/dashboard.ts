@@ -78,6 +78,54 @@ export const MODULOS_PROFESOR: Modulo[] = [
   },
 ];
 
+export const MODULOS_ESTUDIANTE: Modulo[] = [
+  {
+    id: 'consultar-notas',
+    nombre: 'Consultar notas',
+    descripcion: 'Revisa tus calificaciones por periodo.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'consultar-asistencias',
+    nombre: 'Consultar asistencias',
+    descripcion: 'Consulta tu historial de asistencia.',
+    icon: CrudIcons.users,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'consultar-horario',
+    nombre: 'Consultar horario',
+    descripcion: 'Mira tu horario academico.',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/dashboard',
+  },
+];
+
+export const MODULOS_ACUDIENTE: Modulo[] = [
+  {
+    id: 'notas-acudido',
+    nombre: 'Ver notas del acudido',
+    descripcion: 'Consulta las calificaciones de tus acudidos.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'asistencias-acudido',
+    nombre: 'Ver asistencias',
+    descripcion: 'Revisa la asistencia de tus acudidos.',
+    icon: CrudIcons.users,
+    ruta: '/(dashboard)/dashboard',
+  },
+  {
+    id: 'horario-acudido',
+    nombre: 'Ver horario',
+    descripcion: 'Consulta el horario de tus acudidos.',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/dashboard',
+  },
+];
+
 export const WELCOME_BY_ROLE: Record<string, { titulo: string; subtitulo: string }> = {
   administrador: {
     titulo: 'Panel de administracion',
@@ -88,12 +136,12 @@ export const WELCOME_BY_ROLE: Record<string, { titulo: string; subtitulo: string
     subtitulo: 'Gestiona horarios, asistencia, notas y actividades de tus cursos.',
   },
   estudiante: {
-    titulo: 'Hola, estudiante',
-    subtitulo: 'Pronto podras consultar tus notas y asistencias aqui.',
+    titulo: 'Panel estudiante',
+    subtitulo: 'Consulta tus notas, asistencias y horario academico.',
   },
   acudiente: {
-    titulo: 'Hola, acudiente',
-    subtitulo: 'Pronto podras ver el avance academico de tus acudidos.',
+    titulo: 'Panel acudiente',
+    subtitulo: 'Acompana el avance academico de tus acudidos.',
   },
 };
 
@@ -104,7 +152,9 @@ export function getWelcomeForRole(rol: string, nombre: string) {
   };
 
   return {
-    titulo: rol === 'administrador' || rol === 'profesor' ? config.titulo : `${config.titulo}, ${nombre}`,
+    titulo: ['administrador', 'profesor', 'estudiante', 'acudiente'].includes(rol)
+      ? config.titulo
+      : `${config.titulo}, ${nombre}`,
     subtitulo: config.subtitulo,
   };
 }
@@ -117,8 +167,18 @@ export function isProfessor(rol: string) {
   return rol === 'profesor';
 }
 
+export function isStudent(rol: string) {
+  return rol === 'estudiante';
+}
+
+export function isGuardian(rol: string) {
+  return rol === 'acudiente';
+}
+
 export function getModulesForRole(rol: string) {
   if (isAdmin(rol)) return MODULOS_ADMIN;
   if (isProfessor(rol)) return MODULOS_PROFESOR;
+  if (isStudent(rol)) return MODULOS_ESTUDIANTE;
+  if (isGuardian(rol)) return MODULOS_ACUDIENTE;
   return [];
 }
