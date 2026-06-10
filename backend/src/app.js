@@ -7,13 +7,10 @@ const profesorRoutes = require("./routes/profesorRoutes");
 const rolRoutes = require("./routes/rolRoutes");
 const matriculaRoutes = require("./routes/matriculaRoutes");
 const personaRoutes = require("./routes/personaRoutes");
-<<<<<<< HEAD
 const salonRoutes = require("./routes/salonRoutes");
-=======
 const horarioRoutes = require("./routes/horarioRoutes");
 const asistenciaRoutes = require("./routes/asistenciaRoutes");
 const comunicadoRoutes = require("./routes/comunicadoRoutes");
->>>>>>> 85f99dd87898cb6b2eb1999f162bdff73ee68b9f
 const errorHandler = require("./middlewares/errorHandler");
 const pool = require("./config/db");
 
@@ -92,13 +89,10 @@ app.use("/", profesorRoutes);
 app.use("/", rolRoutes);
 app.use("/", matriculaRoutes);
 app.use("/", personaRoutes);
-<<<<<<< HEAD
 app.use("/", salonRoutes);
-=======
 app.use("/", horarioRoutes);
 app.use("/", asistenciaRoutes);
 app.use("/", comunicadoRoutes);
->>>>>>> 85f99dd87898cb6b2eb1999f162bdff73ee68b9f
 
 app.use(errorHandler);
 
