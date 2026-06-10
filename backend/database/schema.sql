@@ -15,6 +15,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 DROP TABLE IF EXISTS notas_actividades;
 DROP TABLE IF EXISTS actividades;
+DROP TABLE IF EXISTS comunicados;
 DROP TABLE IF EXISTS matriculas;
 DROP TABLE IF EXISTS asistencias;
 DROP TABLE IF EXISTS notas;
@@ -346,6 +347,28 @@ CREATE TABLE actividades (
   INDEX idx_actividades_fecha (fecha)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE comunicados (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  titulo VARCHAR(140) NOT NULL,
+  resumen VARCHAR(220),
+  contenido TEXT NOT NULL,
+  prioridad ENUM('baja','media','alta','urgente') NOT NULL DEFAULT 'media',
+  audiencia ENUM('todos','administrador','profesor','estudiante','acudiente') NOT NULL DEFAULT 'todos',
+  curso_id INT UNSIGNED NULL,
+  publicado_por_persona_id INT UNSIGNED NULL,
+  fecha_publicacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  fecha_expiracion DATETIME NULL,
+  estado ENUM('borrador','publicado','archivado') NOT NULL DEFAULT 'publicado',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_comunicados_cursos FOREIGN KEY (curso_id) REFERENCES cursos(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  CONSTRAINT fk_comunicados_personas FOREIGN KEY (publicado_por_persona_id) REFERENCES personas(id) ON UPDATE CASCADE ON DELETE SET NULL,
+  INDEX idx_comunicados_audiencia (audiencia),
+  INDEX idx_comunicados_curso_id (curso_id),
+  INDEX idx_comunicados_estado (estado),
+  INDEX idx_comunicados_fecha_publicacion (fecha_publicacion)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE notas_actividades (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   actividad_id INT UNSIGNED NOT NULL,
@@ -405,3 +428,6 @@ INSERT INTO periodos_academicos (nombre, fecha_inicio, fecha_fin, estado) VALUES
 ('Periodo 2 - 2026', '2026-04-06', '2026-06-12', 'activo'),
 ('Periodo 3 - 2026', '2026-07-06', '2026-09-11', 'inactivo'),
 ('Periodo 4 - 2026', '2026-09-21', '2026-11-27', 'inactivo');
+
+INSERT INTO comunicados (titulo, resumen, contenido, prioridad, audiencia, estado) VALUES
+('Bienvenida al segundo periodo', 'Inicio del periodo academico activo para toda la comunidad.', 'Se recuerda a estudiantes, acudientes y docentes revisar cronogramas, horarios y compromisos del nuevo periodo academico.', 'alta', 'todos', 'publicado');

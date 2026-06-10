@@ -11,6 +11,27 @@ export type Modulo = {
 
 export const MODULOS_ADMIN: Modulo[] = [
   {
+    id: 'comunicados',
+    nombre: 'Comunicados',
+    descripcion: 'Circulares y anuncios segmentados por rol o curso',
+    icon: CrudIcons.megaphone,
+    ruta: '/(dashboard)/comunicados',
+  },
+  {
+    id: 'horarios',
+    nombre: 'Horarios',
+    descripcion: 'Planeacion semanal de cursos, docentes y salones',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/horarios',
+  },
+  {
+    id: 'asistencias',
+    nombre: 'Asistencias',
+    descripcion: 'Seguimiento diario de presencia, tardanzas y excusas',
+    icon: CrudIcons.checkCircle,
+    ruta: '/(dashboard)/asistencias',
+  },
+  {
     id: 'matricula',
     nombre: 'Matricula',
     descripcion: 'Gestion de matriculas de estudiantes',
@@ -53,28 +74,21 @@ export const MODULOS_PROFESOR: Modulo[] = [
     nombre: 'Gestionar horarios',
     descripcion: 'Consulta y organiza tus clases asignadas.',
     icon: CrudIcons.list,
-    ruta: '/(dashboard)/dashboard',
+    ruta: '/(dashboard)/horarios',
   },
   {
     id: 'asistencia',
     nombre: 'Registrar asistencia',
     descripcion: 'Marca asistencia por curso, asignatura y fecha.',
-    icon: CrudIcons.users,
-    ruta: '/(dashboard)/dashboard',
+    icon: CrudIcons.checkCircle,
+    ruta: '/(dashboard)/asistencias',
   },
   {
-    id: 'notas',
-    nombre: 'Registrar notas',
-    descripcion: 'Registra calificaciones de estudiantes por periodo.',
-    icon: CrudIcons.document,
-    ruta: '/(dashboard)/dashboard',
-  },
-  {
-    id: 'actividades',
-    nombre: 'Gestionar actividades',
-    descripcion: 'Crea y administra actividades academicas.',
-    icon: CrudIcons.academicCap,
-    ruta: '/(dashboard)/dashboard',
+    id: 'comunicados',
+    nombre: 'Compartir comunicados',
+    descripcion: 'Publica recordatorios y novedades para tu comunidad.',
+    icon: CrudIcons.megaphone,
+    ruta: '/(dashboard)/comunicados',
   },
 ];
 
@@ -94,11 +108,11 @@ export const MODULOS_ESTUDIANTE: Modulo[] = [
     ruta: '/(dashboard)/dashboard',
   },
   {
-    id: 'consultar-horario',
-    nombre: 'Consultar horario',
-    descripcion: 'Mira tu horario academico.',
-    icon: CrudIcons.list,
-    ruta: '/(dashboard)/dashboard',
+    id: 'comunicados',
+    nombre: 'Comunicados',
+    descripcion: 'Revisa avisos y recordatorios institucionales.',
+    icon: CrudIcons.megaphone,
+    ruta: '/(dashboard)/comunicados',
   },
 ];
 
@@ -118,30 +132,30 @@ export const MODULOS_ACUDIENTE: Modulo[] = [
     ruta: '/(dashboard)/dashboard',
   },
   {
-    id: 'horario-acudido',
-    nombre: 'Ver horario',
-    descripcion: 'Consulta el horario de tus acudidos.',
-    icon: CrudIcons.list,
-    ruta: '/(dashboard)/dashboard',
+    id: 'comunicados',
+    nombre: 'Comunicados',
+    descripcion: 'Consulta circulares y mensajes del colegio.',
+    icon: CrudIcons.megaphone,
+    ruta: '/(dashboard)/comunicados',
   },
 ];
 
 export const WELCOME_BY_ROLE: Record<string, { titulo: string; subtitulo: string }> = {
   administrador: {
     titulo: 'Panel de administracion',
-    subtitulo: 'Gestiona matriculas, personas, usuarios y recursos del colegio.',
+    subtitulo: 'Gestiona matriculas, agenda academica, comunicados y recursos del colegio.',
   },
   profesor: {
     titulo: 'Panel docente',
-    subtitulo: 'Gestiona horarios, asistencia, notas y actividades de tus cursos.',
+    subtitulo: 'Consulta tus horarios, registra asistencia y comparte novedades con la comunidad.',
   },
   estudiante: {
     titulo: 'Panel estudiante',
-    subtitulo: 'Consulta tus notas, asistencias y horario academico.',
+    subtitulo: 'Consulta avisos institucionales y prepara tu experiencia academica digital.',
   },
   acudiente: {
     titulo: 'Panel acudiente',
-    subtitulo: 'Acompana el avance academico de tus acudidos.',
+    subtitulo: 'Sigue comunicados y mantente cerca del ritmo escolar de tus acudidos.',
   },
 };
 

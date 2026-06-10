@@ -9,6 +9,8 @@ import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
 import UsersIcon from 'react-native-heroicons/outline/UsersIcon';
 import BuildingOffice2Icon from 'react-native-heroicons/outline/BuildingOffice2Icon';
 import ClipboardDocumentListIcon from 'react-native-heroicons/outline/ClipboardDocumentListIcon';
+import MegaphoneIcon from 'react-native-heroicons/outline/MegaphoneIcon';
+import CheckBadgeIcon from 'react-native-heroicons/outline/CheckBadgeIcon';
 import type { ComponentType } from 'react';
 import type { SvgProps } from 'react-native-svg';
 
@@ -27,4 +29,6 @@ export const CrudIcons = {
   users: UsersIcon,
   building: BuildingOffice2Icon,
   list: ClipboardDocumentListIcon,
+  megaphone: MegaphoneIcon,
+  checkCircle: CheckBadgeIcon,
 } as const;

@@ -12,6 +12,7 @@ type FormFieldProps = {
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address' | 'numeric' | 'phone-pad';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  multiline?: boolean;
 };
 
 export function FormField({
@@ -22,6 +23,7 @@ export function FormField({
   secureTextEntry,
   keyboardType = 'default',
   autoCapitalize = 'sentences',
+  multiline = false,
 }: FormFieldProps) {
   const theme = useTheme();
 
@@ -38,8 +40,10 @@ export function FormField({
         placeholder={placeholder}
         placeholderTextColor={theme.textSecondary}
         secureTextEntry={secureTextEntry}
+        multiline={multiline}
         style={[
           styles.input,
+          multiline && styles.textArea,
           {
             backgroundColor: theme.surfaceMuted,
             borderColor: theme.border,
@@ -66,5 +70,9 @@ const styles = StyleSheet.create({
     minHeight: 48,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  textArea: {
+    minHeight: 96,
+    textAlignVertical: 'top',
   },
 });

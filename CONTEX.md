@@ -56,3 +56,58 @@ Backend v2 personas+roles. Usuarios vinculan persona existente. Dashboard por ro
 - `frontend/CLAUDE.md` documenta los patrones de diseno tomados como referencia temporal desde `Crear un login`.
 
 **Estado:** El frontend compila correctamente con `npx.cmd tsc --noEmit`.
+
+---
+
+## ACTUALIZACION v6 (10/06/2026 - Horarios, Asistencias, Comunicados)
+
+### Resumen ejecutivo
+- Se agregaron 3 funcionalidades completas y visibles: `horarios`, `asistencias` y `comunicados`.
+- El frontend adopto una paleta mas sobria/editorial para Expo Go: superficies crema, acento teal, destacados ocre y fondos con atmosfera.
+
+### Backend
+- Nuevos endpoints CRUD:
+  - `/api/horarios`
+  - `/api/asistencias`
+  - `/api/comunicados`
+- Nuevos endpoints de apoyo:
+  - `/api/horarios/catalogo`
+  - `/api/asistencias/catalogo`
+  - `/api/asistencias/resumen`
+  - `/api/comunicados/catalogo`
+- Nuevos `GET` globales:
+  - `/api/asignaturas`
+  - `/api/salones`
+- Nuevo SQL incremental:
+  - `backend/database/alterations_2026_06_10.sql`
+- `backend/database/schema.sql` ya incluye la tabla `comunicados` para instalaciones nuevas.
+
+### Frontend
+- Nuevas pantallas en `frontend/src/app/(dashboard)/`:
+  - `horarios.tsx`
+  - `asistencias.tsx`
+  - `comunicados.tsx`
+- Dashboard actualizado por rol:
+  - Admin: ahora ve y navega a los 3 modulos nuevos.
+  - Profesor: ahora ve rutas reales para horarios, asistencias y comunicados.
+  - Estudiante y acudiente: ahora tienen acceso a comunicados.
+- Componentes base mejorados:
+  - `screen-shell.tsx` agrega ambiente visual con fondos flotantes.
+  - `theme.ts` redefine la paleta principal.
+  - `FormField.tsx` ahora soporta `multiline`.
+
+### Validacion realizada
+- `frontend`: `npx.cmd tsc --noEmit` OK.
+- `backend`: `node --check` sobre controladores/modelos nuevos OK.
+- Prueba de integracion real con app Express + MySQL local:
+  - `GET /api/test-db` OK
+  - `GET /api/horarios/catalogo` OK
+  - `GET /api/asistencias/catalogo` OK
+  - `GET /api/comunicados` OK
+- Prueba CRUD real temporal:
+  - crear y eliminar `horario` OK
+  - crear y eliminar `asistencia` OK
+  - crear y eliminar `comunicado` OK
+
+### Nota de diseno
+- Se tomo como criterio de Expo Go usar patrones compatibles con runtime sin depender de configuracion nativa extra: jerarquia fuerte, paneles claros, chips, fondos atmosfericos y contraste alto antes que efectos pesados.

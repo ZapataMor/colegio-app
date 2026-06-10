@@ -28,6 +28,9 @@ export default function DashboardLayout() {
           <Stack.Screen name="profesores" />
           <Stack.Screen name="usuarios" />
           <Stack.Screen name="salones" />
+          <Stack.Screen name="horarios" />
+          <Stack.Screen name="asistencias" />
+          <Stack.Screen name="comunicados" />
         </Stack>
       </View>
     </View>
