@@ -3,10 +3,14 @@ const userModel = require("../models/userModel");
 const { createToken } = require("../utils/jwt");
 
 const welcomeByRole = {
-  administrador: "Bienvenido al panel de administración. Tienes acceso a todos los módulos del sistema.",
-  profesor: "Bienvenido docente. Pronto podrás consultar tus clases, notas y asistencias desde aquí.",
-  estudiante: "Bienvenido estudiante. Pronto podrás ver tu información académica desde esta app.",
-  acudiente: "Bienvenido acudiente. Pronto podrás seguir el progreso de tus acudidos desde aquí.",
+  administrador:
+    "Bienvenido al panel de administracion. Ya puedes gestionar agenda escolar, asistencia y comunicados.",
+  profesor:
+    "Bienvenido docente. Ya tienes acceso a tus horarios, asistencia diaria y comunicados del curso.",
+  estudiante:
+    "Bienvenido estudiante. Revisa comunicados y preparate para los siguientes modulos academicos.",
+  acudiente:
+    "Bienvenido acudiente. Ya puedes seguir comunicados y proximamente ver mas seguimiento academico.",
 };
 
 const login = async (req, res, next) => {
