@@ -1,11 +1,20 @@
 const notaModel = require("../models/notaModel");
 
+const getPersonaIdFromRequest = async (req) => {
+  if (req.user?.personaId) return req.user.personaId;
+  if (!req.user?.id) return null;
+  return notaModel.findPersonaIdByUsuarioId(req.user.id);
+};
+
 const getNotasPorCurso = async (req, res, next) => {
   try {
+    const personaId = await getPersonaIdFromRequest(req);
+
     return res.json({
       ok: true,
       data: await notaModel.findPorCurso({
         periodoId: req.query.periodoId ? Number(req.query.periodoId) : null,
+        profesorPersonaId: req.user?.rol === "profesor" ? personaId : null,
       }),
     });
   } catch (error) {
@@ -47,7 +56,14 @@ const getNotaById = async (req, res, next) => {
 
 const getNotaCatalog = async (req, res, next) => {
   try {
-    return res.json({ ok: true, data: await notaModel.getCatalog() });
+    const personaId = await getPersonaIdFromRequest(req);
+
+    return res.json({
+      ok: true,
+      data: await notaModel.getCatalog({
+        profesorPersonaId: req.user?.rol === "profesor" ? personaId : null,
+      }),
+    });
   } catch (error) {
     return next(error);
   }
@@ -55,12 +71,28 @@ const getNotaCatalog = async (req, res, next) => {
 
 const createNota = async (req, res, next) => {
   try {
-    const { estudianteId, cursoId, asignaturaId, profesorId, periodoId, nota, observacion } = req.body;
+    if (req.user?.rol !== "profesor") {
+      return res.status(403).json({
+        ok: false,
+        message: "Solo un profesor puede registrar notas desde su salon asignado.",
+      });
+    }
 
-    if (!estudianteId || !cursoId || !asignaturaId || !profesorId || !periodoId || nota === undefined || nota === "") {
+    const personaId = await getPersonaIdFromRequest(req);
+    const profesor = personaId ? await notaModel.findProfesorByPersonaId(personaId) : null;
+    if (!profesor) {
+      return res.status(403).json({
+        ok: false,
+        message: "Tu usuario no tiene un perfil de profesor activo asociado.",
+      });
+    }
+
+    const { estudianteId, cursoId, asignaturaId, periodoId, nota, observacion } = req.body;
+
+    if (!estudianteId || !cursoId || !asignaturaId || !periodoId || nota === undefined || nota === "") {
       return res.status(400).json({
         ok: false,
-        message: "estudianteId, cursoId, asignaturaId, profesorId, periodoId y nota son obligatorios.",
+        message: "estudianteId, cursoId, asignaturaId, periodoId y nota son obligatorios.",
       });
     }
 
@@ -69,11 +101,34 @@ const createNota = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: "La nota debe ser un numero entre 0.00 y 5.00." });
     }
 
+    const estudianteValido = await notaModel.estudiantePerteneceCurso(
+      Number(estudianteId),
+      Number(cursoId)
+    );
+    if (!estudianteValido) {
+      return res.status(400).json({
+        ok: false,
+        message: "El estudiante seleccionado no pertenece al salon indicado.",
+      });
+    }
+
+    const profesorAsignado = await notaModel.profesorTieneClase({
+      profesorId: profesor.id,
+      cursoId: Number(cursoId),
+      asignaturaId: Number(asignaturaId),
+    });
+    if (!profesorAsignado) {
+      return res.status(403).json({
+        ok: false,
+        message: "Solo puedes registrar notas en salones y asignaturas que tengas asignados.",
+      });
+    }
+
     const id = await notaModel.create({
       estudianteId: Number(estudianteId),
       cursoId: Number(cursoId),
       asignaturaId: Number(asignaturaId),
-      profesorId: Number(profesorId),
+      profesorId: profesor.id,
       periodoId: Number(periodoId),
       nota: notaNum,
       observacion,

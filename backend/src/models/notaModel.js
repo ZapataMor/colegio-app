@@ -73,7 +73,7 @@ const findById = async (id) => {
   return rows[0] || null;
 };
 
-const getCatalog = async () => {
+const getCatalog = async ({ profesorPersonaId = null } = {}) => {
   const [estudiantes] = await pool.query(
     `SELECT e.id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre, p.documento, c.nombre AS curso_nombre, e.curso_id
      FROM estudiantes e
@@ -83,17 +83,36 @@ const getCatalog = async () => {
      ORDER BY p.apellidos, p.nombres ASC`
   );
 
-  const [asignaturas] = await pool.query(
-    `SELECT id, nombre FROM asignaturas WHERE estado = 'activo' ORDER BY nombre ASC`
-  );
+  const [asignaturas] = profesorPersonaId
+    ? await pool.query(
+        `SELECT DISTINCT a.id, a.nombre, h.curso_id
+         FROM horarios h
+         INNER JOIN profesores pr ON pr.id = h.profesor_id
+         INNER JOIN asignaturas a ON a.id = h.asignatura_id
+         WHERE pr.persona_id = ? AND h.estado = 'activo' AND a.estado = 'activo'
+         ORDER BY a.nombre ASC`,
+        [profesorPersonaId]
+      )
+    : await pool.query(
+        `SELECT id, nombre FROM asignaturas WHERE estado = 'activo' ORDER BY nombre ASC`
+      );
 
-  const [profesores] = await pool.query(
-    `SELECT pr.id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
-     FROM profesores pr
-     INNER JOIN personas p ON p.id = pr.persona_id
-     WHERE pr.estado = 'activo'
-     ORDER BY p.apellidos, p.nombres ASC`
-  );
+  const [profesores] = profesorPersonaId
+    ? await pool.query(
+        `SELECT pr.id, pr.persona_id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
+         FROM profesores pr
+         INNER JOIN personas p ON p.id = pr.persona_id
+         WHERE pr.estado = 'activo' AND pr.persona_id = ?
+         ORDER BY p.apellidos, p.nombres ASC`,
+        [profesorPersonaId]
+      )
+    : await pool.query(
+        `SELECT pr.id, pr.persona_id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
+         FROM profesores pr
+         INNER JOIN personas p ON p.id = pr.persona_id
+         WHERE pr.estado = 'activo'
+         ORDER BY p.apellidos, p.nombres ASC`
+      );
 
   const [periodos] = await pool.query(
     `SELECT id, nombre, estado FROM periodos_academicos ORDER BY fecha_inicio DESC`
@@ -144,8 +163,55 @@ const deleteNota = async (id) => {
   return result.affectedRows > 0;
 };
 
-const findPorCurso = async ({ periodoId = null } = {}) => {
+const findProfesorByPersonaId = async (personaId) => {
+  const [rows] = await pool.query(
+    `SELECT id, persona_id FROM profesores WHERE persona_id = ? AND estado = 'activo' LIMIT 1`,
+    [personaId]
+  );
+  return rows[0] || null;
+};
+
+const findPersonaIdByUsuarioId = async (usuarioId) => {
+  const [rows] = await pool.query(
+    `SELECT persona_id FROM usuarios WHERE id = ? LIMIT 1`,
+    [usuarioId]
+  );
+  return rows[0]?.persona_id || null;
+};
+
+const estudiantePerteneceCurso = async (estudianteId, cursoId) => {
+  const [rows] = await pool.query(
+    `SELECT id FROM estudiantes WHERE id = ? AND curso_id = ? AND estado = 'activo' LIMIT 1`,
+    [estudianteId, cursoId]
+  );
+  return Boolean(rows[0]);
+};
+
+const profesorTieneClase = async ({ profesorId, cursoId, asignaturaId }) => {
+  const [rows] = await pool.query(
+    `SELECT id
+     FROM horarios
+     WHERE profesor_id = ? AND curso_id = ? AND asignatura_id = ? AND estado = 'activo'
+     LIMIT 1`,
+    [profesorId, cursoId, asignaturaId]
+  );
+  return Boolean(rows[0]);
+};
+
+const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {}) => {
   // Query 1: cursos activos con sus estudiantes activos
+  const cursoParams = [];
+  const profesorCursoJoin = profesorPersonaId
+    ? `INNER JOIN (
+        SELECT DISTINCT h.curso_id
+        FROM horarios h
+        INNER JOIN profesores pr ON pr.id = h.profesor_id
+        WHERE pr.persona_id = ? AND h.estado = 'activo'
+      ) cursos_profesor ON cursos_profesor.curso_id = c.id`
+    : "";
+
+  if (profesorPersonaId) cursoParams.push(profesorPersonaId);
+
   const [filas] = await pool.query(
     `SELECT
       c.id   AS curso_id,
@@ -154,10 +220,12 @@ const findPorCurso = async ({ periodoId = null } = {}) => {
       CONCAT(p.nombres, ' ', p.apellidos) AS estudiante_nombre,
       p.documento
     FROM cursos c
+    ${profesorCursoJoin}
     LEFT JOIN estudiantes e ON e.curso_id = c.id AND e.estado = 'activo'
     LEFT JOIN personas p ON p.id = e.persona_id
     WHERE c.estado = 'activo'
-    ORDER BY c.nombre ASC, p.apellidos ASC, p.nombres ASC`
+    ORDER BY c.nombre ASC, p.apellidos ASC, p.nombres ASC`,
+    cursoParams
   );
 
   // Query 2: todas las notas (filtradas por periodo si se indica)
@@ -166,6 +234,11 @@ const findPorCurso = async ({ periodoId = null } = {}) => {
   if (periodoId) {
     notasWhere = "WHERE n.periodo_id = ?";
     notasParams.push(periodoId);
+  }
+
+  if (profesorPersonaId) {
+    notasWhere += notasWhere ? " AND pr.persona_id = ?" : "WHERE pr.persona_id = ?";
+    notasParams.push(profesorPersonaId);
   }
 
   const [notasRows] = await pool.query(
@@ -231,4 +304,16 @@ const findPorCurso = async ({ periodoId = null } = {}) => {
   return Array.from(cursosMap.values());
 };
 
-module.exports = { findAll, findById, getCatalog, findPorCurso, create, update, deleteNota };
+module.exports = {
+  findAll,
+  findById,
+  getCatalog,
+  findPorCurso,
+  findProfesorByPersonaId,
+  findPersonaIdByUsuarioId,
+  estudiantePerteneceCurso,
+  profesorTieneClase,
+  create,
+  update,
+  deleteNota,
+};

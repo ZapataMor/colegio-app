@@ -19,6 +19,7 @@ import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
+import { getUserSession } from '@/lib/session';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ type CursoAgrupado = {
   estudiantes: Estudiante[];
 };
 
-type CatalogItem = { id: number; nombre: string; curso_id?: number; curso_nombre?: string };
+type CatalogItem = { id: number; nombre: string; curso_id?: number; curso_nombre?: string; persona_id?: number };
 
 type Catalog = {
   estudiantes: (CatalogItem & { curso_id: number; curso_nombre: string; documento: string })[];
@@ -81,6 +82,8 @@ const COL = { estudiante: 170, asignatura: 130, profesor: 140, periodo: 110, not
 
 export default function NotasScreen() {
   const theme = useTheme();
+  const session = getUserSession();
+  const isProfesor = session?.rol === 'profesor';
 
   const [cursos, setCursos] = useState<CursoAgrupado[]>([]);
   const [catalog, setCatalog] = useState<Catalog>({
@@ -117,11 +120,38 @@ export default function NotasScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const currentProfesor =
+    catalog.profesores.find((profesor) => profesor.persona_id === session?.personaId) ??
+    (isProfesor && catalog.profesores.length === 1 ? catalog.profesores[0] : null);
+
   // ── Acciones CRUD ───────────────────────────────────────────────────────────
 
-  const openCreate = () => {
+  const openCreate = (curso: CursoAgrupado) => {
+    if (!isProfesor) return;
+    if (!currentProfesor) {
+      Alert.alert('Perfil docente', 'Tu usuario no tiene un perfil de profesor activo asociado.');
+      return;
+    }
+
+    const asignatura = catalog.asignaturas.find(
+      (item) => !item.curso_id || item.curso_id === curso.cursoId
+    );
+    if (!asignatura) {
+      Alert.alert('Sin asignaturas', 'No tienes asignaturas activas para este salon.');
+      return;
+    }
+
+    const periodoActivo =
+      catalog.periodos.find((periodo) => periodo.estado === 'activo') ?? catalog.periodos[0];
+
     setEditingNota(null);
-    setForm(emptyForm);
+    setForm({
+      ...emptyForm,
+      cursoId: String(curso.cursoId),
+      asignaturaId: String(asignatura.id),
+      profesorId: String(currentProfesor.id),
+      periodoId: periodoActivo ? String(periodoActivo.id) : '',
+    });
     setModalVisible(true);
   };
 
@@ -225,10 +255,6 @@ export default function NotasScreen() {
             {totalEstudiantes} estudiante{totalEstudiantes !== 1 ? 's' : ''} · {totalNotas} nota{totalNotas !== 1 ? 's' : ''}
           </ThemedText>
         </View>
-        <Pressable onPress={openCreate} style={[styles.addBtn, { backgroundColor: theme.primary }]}>
-          <PlusIcon width={16} height={16} color={theme.primaryText} />
-          <ThemedText style={[styles.addBtnText, { color: theme.primaryText }]}>Nueva nota</ThemedText>
-        </Pressable>
       </ThemedView>
 
       {/* Filtro por período */}
@@ -278,7 +304,11 @@ export default function NotasScreen() {
                   Ver salones
                 </ThemedText>
               </Pressable>
-              <CursoSeccion curso={selectedCurso} />
+              <CursoSeccion
+                curso={selectedCurso}
+                canCreateNota={isProfesor}
+                onCreateNota={() => openCreate(selectedCurso)}
+              />
             </>
           ) : cursos.length > 0 ? (
             <View style={styles.salonGrid}>
@@ -309,6 +339,7 @@ export default function NotasScreen() {
         setForm={setForm}
         catalog={catalog}
         saving={saving}
+        lockProfesor={isProfesor}
         onEstudianteChange={onEstudianteChange}
         onSave={save}
         onClose={() => setModalVisible(false)}
@@ -336,8 +367,12 @@ function SalonCard({ curso, onPress }: { curso: CursoAgrupado; onPress: () => vo
 
 function CursoSeccion({
   curso,
+  canCreateNota = false,
+  onCreateNota,
 }: {
   curso: CursoAgrupado;
+  canCreateNota?: boolean;
+  onCreateNota?: () => void;
 }) {
   const theme = useTheme();
   const asignaturas = Array.from(
@@ -353,10 +388,18 @@ function CursoSeccion({
     <View style={styles.seccion}>
       {/* Título del curso */}
       <View style={[styles.cursoHeader, { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}44` }]}>
-        <ThemedText style={[styles.cursoTitulo, { color: theme.primary }]}>{curso.cursoNombre}</ThemedText>
-        <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          {curso.estudiantes.length} estudiante{curso.estudiantes.length !== 1 ? 's' : ''}
-        </ThemedText>
+        <View style={styles.cursoHeaderText}>
+          <ThemedText style={[styles.cursoTitulo, { color: theme.primary }]}>{curso.cursoNombre}</ThemedText>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            {curso.estudiantes.length} estudiante{curso.estudiantes.length !== 1 ? 's' : ''}
+          </ThemedText>
+        </View>
+        {canCreateNota && onCreateNota ? (
+          <Pressable onPress={onCreateNota} style={[styles.addBtn, { backgroundColor: theme.primary }]}>
+            <PlusIcon width={16} height={16} color={theme.primaryText} />
+            <ThemedText style={[styles.addBtnText, { color: theme.primaryText }]}>Agregar nota</ThemedText>
+          </Pressable>
+        ) : null}
       </View>
 
       {curso.estudiantes.length === 0 ? (
@@ -466,6 +509,7 @@ function Td({ children, width, align = 'left' }: { children: React.ReactNode; wi
 
 function NotaModal({
   visible, editing, form, setForm, catalog, saving,
+  lockProfesor = false,
   onEstudianteChange, onSave, onClose,
 }: {
   visible: boolean;
@@ -474,11 +518,25 @@ function NotaModal({
   setForm: React.Dispatch<React.SetStateAction<typeof emptyForm>>;
   catalog: Catalog;
   saving: boolean;
+  lockProfesor?: boolean;
   onEstudianteChange: (id: string) => void;
   onSave: () => void;
   onClose: () => void;
 }) {
   const theme = useTheme();
+  const estudiantesOptions = catalog.estudiantes
+    .filter((estudiante) => !form.cursoId || String(estudiante.curso_id) === form.cursoId)
+    .map((estudiante) => ({
+      value: String(estudiante.id),
+      label: `${estudiante.nombre} (${estudiante.curso_nombre})`,
+    }));
+  const asignaturasOptions = catalog.asignaturas
+    .filter((asignatura) => !form.cursoId || !asignatura.curso_id || String(asignatura.curso_id) === form.cursoId)
+    .map((asignatura) => ({ value: String(asignatura.id), label: asignatura.nombre }));
+  const profesoresOptions = (lockProfesor
+    ? catalog.profesores.filter((profesor) => String(profesor.id) === form.profesorId)
+    : catalog.profesores
+  ).map((profesor) => ({ value: String(profesor.id), label: profesor.nombre }));
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
@@ -489,19 +547,19 @@ function NotaModal({
           <SelectField
             label="Estudiante *"
             value={form.estudianteId}
-            options={catalog.estudiantes.map((e) => ({ value: String(e.id), label: `${e.nombre} (${e.curso_nombre})` }))}
+            options={estudiantesOptions}
             onSelect={onEstudianteChange}
           />
           <SelectField
             label="Asignatura *"
             value={form.asignaturaId}
-            options={catalog.asignaturas.map((a) => ({ value: String(a.id), label: a.nombre }))}
+            options={asignaturasOptions}
             onSelect={(v) => setForm((f) => ({ ...f, asignaturaId: v }))}
           />
           <SelectField
             label="Profesor *"
             value={form.profesorId}
-            options={catalog.profesores.map((p) => ({ value: String(p.id), label: p.nombre }))}
+            options={profesoresOptions}
             onSelect={(v) => setForm((f) => ({ ...f, profesorId: v }))}
           />
           <SelectField
@@ -647,7 +705,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: 8, borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
     paddingHorizontal: Spacing.three, paddingVertical: 10,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    gap: Spacing.two, flexWrap: 'wrap',
   },
+  cursoHeaderText: { flex: 1, minWidth: 120 },
   cursoTitulo: { fontSize: 15, fontWeight: '700' },
   emptyRow: {
     borderWidth: 1, borderTopWidth: 0, borderRadius: 8, borderTopLeftRadius: 0, borderTopRightRadius: 0,
