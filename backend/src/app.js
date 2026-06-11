@@ -12,22 +12,30 @@ const horarioRoutes = require("./routes/horarioRoutes");
 const asistenciaRoutes = require("./routes/asistenciaRoutes");
 const comunicadoRoutes = require("./routes/comunicadoRoutes");
 const boletinRoutes = require("./routes/boletinRoutes");
+const periodoRoutes = require("./routes/periodoRoutes");
+const notaRoutes = require("./routes/notaRoutes");
+const meRoutes = require("./routes/meRoutes");
 const errorHandler = require("./middlewares/errorHandler");
+const { authenticate } = require("./middlewares/authMiddleware");
 const pool = require("./config/db");
+const env = require("./config/env");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+// Rutas públicas — no requieren token
 app.get("/", (req, res) => {
   res.json({ message: "API Colegio App funcionando." });
 });
 
 app.get("/api/test-db", async (req, res, next) => {
+  if (env.nodeEnv === "production") {
+    return res.status(404).json({ ok: false, message: "Not found." });
+  }
   try {
     const [rows] = await pool.query("SELECT 1 + 1 AS resultado");
-
     res.json({
       ok: true,
       mensaje: "Conexion a MySQL exitosa",
@@ -38,16 +46,17 @@ app.get("/api/test-db", async (req, res, next) => {
   }
 });
 
+app.use("/", authRoutes);
+
+// A partir de aquí todas las rutas /api/* requieren token JWT válido
+app.use("/api", authenticate);
+
 app.get("/api/cursos", async (req, res, next) => {
   try {
     const [rows] = await pool.query(
       "SELECT id, nombre, nivel, jornada, estado FROM cursos ORDER BY nombre ASC"
     );
-
-    res.json({
-      ok: true,
-      data: rows,
-    });
+    res.json({ ok: true, data: rows });
   } catch (error) {
     next(error);
   }
@@ -58,32 +67,12 @@ app.get("/api/asignaturas", async (req, res, next) => {
     const [rows] = await pool.query(
       "SELECT id, nombre, descripcion, estado FROM asignaturas ORDER BY nombre ASC"
     );
-
-    res.json({
-      ok: true,
-      data: rows,
-    });
+    res.json({ ok: true, data: rows });
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/salones", async (req, res, next) => {
-  try {
-    const [rows] = await pool.query(
-      "SELECT id, nombre, ubicacion, capacidad, estado FROM salones ORDER BY nombre ASC"
-    );
-
-    res.json({
-      ok: true,
-      data: rows,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.use("/", authRoutes);
 app.use("/", usuarioRoutes);
 app.use("/", estudianteRoutes);
 app.use("/", profesorRoutes);
@@ -95,6 +84,9 @@ app.use("/", horarioRoutes);
 app.use("/", asistenciaRoutes);
 app.use("/", comunicadoRoutes);
 app.use("/", boletinRoutes);
+app.use("/", periodoRoutes);
+app.use("/", notaRoutes);
+app.use("/", meRoutes);
 
 app.use(errorHandler);
 

@@ -27,8 +27,8 @@ export default function LoginScreen() {
   const router = useRouter();
   const theme = useTheme();
   const apiUrl = useMemo(() => getApiUrl(), []);
-  const [correo, setCorreo] = useState('admin@colegio.com');
-  const [contrasena, setContrasena] = useState('Admin123*');
+  const [correo, setCorreo] = useState('');
+  const [contrasena, setContrasena] = useState('');
   const [status, setStatus] = useState<LoginState>('idle');
   const [message, setMessage] = useState('');
 

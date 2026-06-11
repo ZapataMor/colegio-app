@@ -11,18 +11,11 @@ export type Modulo = {
 
 export const MODULOS_ADMIN: Modulo[] = [
   {
-    id: 'comunicados',
-    nombre: 'Comunicados',
-    descripcion: 'Circulares y anuncios segmentados por rol o curso',
-    icon: CrudIcons.megaphone,
-    ruta: '/(dashboard)/comunicados',
-  },
-  {
-    id: 'horarios',
-    nombre: 'Horarios',
-    descripcion: 'Planeacion semanal de cursos, docentes y salones',
-    icon: CrudIcons.list,
-    ruta: '/(dashboard)/horarios',
+    id: 'notas',
+    nombre: 'Notas',
+    descripcion: 'Registro y consulta de calificaciones por periodo',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/notas',
   },
   {
     id: 'asistencias',
@@ -37,6 +30,27 @@ export const MODULOS_ADMIN: Modulo[] = [
     descripcion: 'Consulta e imprime reportes academicos por estudiante',
     icon: CrudIcons.document,
     ruta: '/(dashboard)/boletines',
+  },
+  {
+    id: 'comunicados',
+    nombre: 'Comunicados',
+    descripcion: 'Circulares y anuncios segmentados por rol o curso',
+    icon: CrudIcons.megaphone,
+    ruta: '/(dashboard)/comunicados',
+  },
+  {
+    id: 'horarios',
+    nombre: 'Horarios',
+    descripcion: 'Planeacion semanal de cursos, docentes y salones',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/horarios',
+  },
+  {
+    id: 'periodos',
+    nombre: 'Periodos academicos',
+    descripcion: 'Gestion del calendario escolar por periodos',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/periodos',
   },
   {
     id: 'matricula',
@@ -77,11 +91,11 @@ export const MODULOS_ADMIN: Modulo[] = [
 
 export const MODULOS_PROFESOR: Modulo[] = [
   {
-    id: 'horarios',
-    nombre: 'Gestionar horarios',
-    descripcion: 'Consulta y organiza tus clases asignadas.',
-    icon: CrudIcons.list,
-    ruta: '/(dashboard)/horarios',
+    id: 'notas',
+    nombre: 'Registrar notas',
+    descripcion: 'Ingresa y edita calificaciones de tus estudiantes.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/notas',
   },
   {
     id: 'asistencia',
@@ -91,8 +105,22 @@ export const MODULOS_PROFESOR: Modulo[] = [
     ruta: '/(dashboard)/asistencias',
   },
   {
+    id: 'horarios',
+    nombre: 'Mis horarios',
+    descripcion: 'Consulta tus clases asignadas por dia.',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/horarios',
+  },
+  {
+    id: 'boletines',
+    nombre: 'Boletines',
+    descripcion: 'Consulta el reporte academico de tus estudiantes.',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/boletines',
+  },
+  {
     id: 'comunicados',
-    nombre: 'Compartir comunicados',
+    nombre: 'Comunicados',
     descripcion: 'Publica recordatorios y novedades para tu comunidad.',
     icon: CrudIcons.megaphone,
     ruta: '/(dashboard)/comunicados',
@@ -101,18 +129,18 @@ export const MODULOS_PROFESOR: Modulo[] = [
 
 export const MODULOS_ESTUDIANTE: Modulo[] = [
   {
-    id: 'consultar-notas',
-    nombre: 'Consultar notas',
-    descripcion: 'Revisa tus calificaciones por periodo.',
+    id: 'mis-notas',
+    nombre: 'Mis notas',
+    descripcion: 'Revisa tus calificaciones y desempeno por periodo.',
     icon: CrudIcons.document,
-    ruta: '/(dashboard)/dashboard',
+    ruta: '/(dashboard)/mis-notas',
   },
   {
-    id: 'consultar-asistencias',
-    nombre: 'Consultar asistencias',
-    descripcion: 'Consulta tu historial de asistencia.',
-    icon: CrudIcons.users,
-    ruta: '/(dashboard)/dashboard',
+    id: 'mis-asistencias',
+    nombre: 'Mis asistencias',
+    descripcion: 'Consulta tu historial de asistencia por materia.',
+    icon: CrudIcons.checkCircle,
+    ruta: '/(dashboard)/mis-asistencias',
   },
   {
     id: 'comunicados',
@@ -121,29 +149,22 @@ export const MODULOS_ESTUDIANTE: Modulo[] = [
     icon: CrudIcons.megaphone,
     ruta: '/(dashboard)/comunicados',
   },
-  {
-    id: 'boletines',
-    nombre: 'Mi boletin',
-    descripcion: 'Visualiza tu resumen academico por periodo.',
-    icon: CrudIcons.document,
-    ruta: '/(dashboard)/boletines',
-  },
 ];
 
 export const MODULOS_ACUDIENTE: Modulo[] = [
   {
-    id: 'notas-acudido',
-    nombre: 'Ver notas del acudido',
-    descripcion: 'Consulta las calificaciones de tus acudidos.',
+    id: 'mis-notas',
+    nombre: 'Notas del acudido',
+    descripcion: 'Consulta las calificaciones y boletin de tu acudido.',
     icon: CrudIcons.document,
-    ruta: '/(dashboard)/dashboard',
+    ruta: '/(dashboard)/mis-notas',
   },
   {
-    id: 'asistencias-acudido',
-    nombre: 'Ver asistencias',
-    descripcion: 'Revisa la asistencia de tus acudidos.',
-    icon: CrudIcons.users,
-    ruta: '/(dashboard)/dashboard',
+    id: 'mis-asistencias',
+    nombre: 'Asistencias del acudido',
+    descripcion: 'Revisa el historial de asistencia de tu acudido.',
+    icon: CrudIcons.checkCircle,
+    ruta: '/(dashboard)/mis-asistencias',
   },
   {
     id: 'comunicados',
@@ -151,13 +172,6 @@ export const MODULOS_ACUDIENTE: Modulo[] = [
     descripcion: 'Consulta circulares y mensajes del colegio.',
     icon: CrudIcons.megaphone,
     ruta: '/(dashboard)/comunicados',
-  },
-  {
-    id: 'boletines',
-    nombre: 'Boletines',
-    descripcion: 'Prepara la consulta del boletin academico del acudido.',
-    icon: CrudIcons.document,
-    ruta: '/(dashboard)/boletines',
   },
 ];
 
