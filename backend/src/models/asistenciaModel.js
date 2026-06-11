@@ -29,6 +29,7 @@ INNER JOIN personas pe ON pe.id = e.persona_id`;
 
 const findAll = async ({
   cursoId = null,
+  asignaturaId = null,
   fecha = null,
   estudianteId = null,
   profesorId = null,
@@ -44,6 +45,11 @@ const findAll = async ({
   if (cursoId) {
     conditions.push("a.curso_id = ?");
     params.push(cursoId);
+  }
+
+  if (asignaturaId) {
+    conditions.push("a.asignatura_id = ?");
+    params.push(asignaturaId);
   }
 
   if (fecha) {
@@ -161,7 +167,7 @@ const deleteAsistencia = async (id) => {
   return result.affectedRows > 0;
 };
 
-const getResumen = async ({ cursoId = null, fecha = null, profesorPersonaId = null } = {}) => {
+const getResumen = async ({ cursoId = null, asignaturaId = null, fecha = null, profesorPersonaId = null } = {}) => {
   let query = `SELECT
     a.estado_asistencia,
     COUNT(*) AS total
@@ -173,6 +179,11 @@ const getResumen = async ({ cursoId = null, fecha = null, profesorPersonaId = nu
   if (cursoId) {
     conditions.push("a.curso_id = ?");
     params.push(cursoId);
+  }
+
+  if (asignaturaId) {
+    conditions.push("a.asignatura_id = ?");
+    params.push(asignaturaId);
   }
 
   if (fecha) {
@@ -216,8 +227,167 @@ const getCatalog = async () => {
   const [asignaturas] = await pool.query(
     `SELECT id, nombre FROM asignaturas WHERE estado = 'activo' ORDER BY nombre ASC`
   );
+  const [periodos] = await pool.query(
+    `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+    FROM periodos_academicos
+    ORDER BY fecha_inicio DESC`
+  );
 
-  return { cursos, estudiantes, profesores, asignaturas };
+  return { cursos, estudiantes, profesores, asignaturas, periodos };
+};
+
+const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {}) => {
+  const [filas] = await pool.query(
+    `SELECT
+      c.id AS curso_id,
+      c.nombre AS curso_nombre,
+      e.id AS estudiante_id,
+      CONCAT(p.nombres, ' ', p.apellidos) AS estudiante_nombre,
+      p.documento
+    FROM cursos c
+    LEFT JOIN estudiantes e ON e.curso_id = c.id AND e.estado = 'activo'
+    LEFT JOIN personas p ON p.id = e.persona_id
+    WHERE c.estado = 'activo'
+    ORDER BY c.nombre ASC, p.apellidos ASC, p.nombres ASC`
+  );
+
+  const subjectParams = [];
+  let subjectProfessorFilter = "";
+  if (profesorPersonaId) {
+    subjectProfessorFilter = "WHERE pr.persona_id = ?";
+    subjectParams.push(profesorPersonaId);
+  }
+
+  const [asignaturasRows] = await pool.query(
+    `SELECT
+      ca.curso_id,
+      ca.asignatura_id,
+      s.nombre AS asignatura_nombre
+    FROM (
+      SELECT h.curso_id, h.asignatura_id, h.profesor_id
+      FROM horarios h
+      WHERE h.estado = 'activo'
+      UNION
+      SELECT a.curso_id, a.asignatura_id, a.profesor_id
+      FROM asistencias a
+      UNION
+      SELECT n.curso_id, n.asignatura_id, n.profesor_id
+      FROM notas n
+    ) ca
+    INNER JOIN profesores pr ON pr.id = ca.profesor_id
+    INNER JOIN asignaturas s ON s.id = ca.asignatura_id
+    ${subjectProfessorFilter}
+    GROUP BY ca.curso_id, ca.asignatura_id, s.nombre
+    ORDER BY s.nombre ASC`,
+    subjectParams
+  );
+
+  const asistenciaParams = [];
+  const asistenciaConditions = [];
+
+  if (periodoId) {
+    asistenciaConditions.push(`a.fecha BETWEEN (
+      SELECT fecha_inicio FROM periodos_academicos WHERE id = ?
+    ) AND (
+      SELECT fecha_fin FROM periodos_academicos WHERE id = ?
+    )`);
+    asistenciaParams.push(periodoId, periodoId);
+  }
+
+  if (profesorPersonaId) {
+    asistenciaConditions.push("pr.persona_id = ?");
+    asistenciaParams.push(profesorPersonaId);
+  }
+
+  const asistenciaWhere = asistenciaConditions.length
+    ? `WHERE ${asistenciaConditions.join(" AND ")}`
+    : "";
+
+  const [asistenciasRows] = await pool.query(
+    `SELECT
+      a.id AS asistencia_id,
+      a.estudiante_id,
+      a.curso_id,
+      a.asignatura_id,
+      a.profesor_id,
+      a.fecha,
+      a.estado_asistencia,
+      a.observacion,
+      s.nombre AS asignatura_nombre,
+      CONCAT(pp.nombres, ' ', pp.apellidos) AS profesor_nombre
+    FROM asistencias a
+    INNER JOIN asignaturas s ON s.id = a.asignatura_id
+    INNER JOIN profesores pr ON pr.id = a.profesor_id
+    INNER JOIN personas pp ON pp.id = pr.persona_id
+    ${asistenciaWhere}
+    ORDER BY a.fecha ASC, a.estudiante_id ASC`,
+    asistenciaParams
+  );
+
+  const asistenciasPorEstudiante = {};
+  const fechasPorAsignatura = {};
+  const resumenPorAsignatura = {};
+
+  for (const a of asistenciasRows) {
+    const fecha = a.fecha instanceof Date ? a.fecha.toISOString().slice(0, 10) : String(a.fecha).slice(0, 10);
+    const cursoAsignaturaKey = `${a.curso_id}:${a.asignatura_id}`;
+    const estudianteKey = String(a.estudiante_id);
+
+    if (!asistenciasPorEstudiante[estudianteKey]) asistenciasPorEstudiante[estudianteKey] = [];
+    asistenciasPorEstudiante[estudianteKey].push({
+      asistenciaId: a.asistencia_id,
+      asignaturaId: a.asignatura_id,
+      profesorId: a.profesor_id,
+      profesor: a.profesor_nombre,
+      fecha,
+      estado: a.estado_asistencia,
+      observacion: a.observacion ?? null,
+    });
+
+    if (!fechasPorAsignatura[cursoAsignaturaKey]) fechasPorAsignatura[cursoAsignaturaKey] = new Set();
+    fechasPorAsignatura[cursoAsignaturaKey].add(fecha);
+
+    if (!resumenPorAsignatura[cursoAsignaturaKey]) {
+      resumenPorAsignatura[cursoAsignaturaKey] = { presente: 0, ausente: 0, excusa: 0, tardanza: 0, total: 0 };
+    }
+    resumenPorAsignatura[cursoAsignaturaKey][a.estado_asistencia] += 1;
+    resumenPorAsignatura[cursoAsignaturaKey].total += 1;
+  }
+
+  const asignaturasPorCurso = {};
+  for (const asignatura of asignaturasRows) {
+    const key = `${asignatura.curso_id}:${asignatura.asignatura_id}`;
+    if (!asignaturasPorCurso[asignatura.curso_id]) asignaturasPorCurso[asignatura.curso_id] = [];
+    asignaturasPorCurso[asignatura.curso_id].push({
+      asignaturaId: asignatura.asignatura_id,
+      asignaturaNombre: asignatura.asignatura_nombre,
+      fechas: Array.from(fechasPorAsignatura[key] ?? []).sort(),
+      resumen: resumenPorAsignatura[key] ?? { presente: 0, ausente: 0, excusa: 0, tardanza: 0, total: 0 },
+    });
+  }
+
+  const cursosMap = new Map();
+  for (const fila of filas) {
+    if (!cursosMap.has(fila.curso_id)) {
+      cursosMap.set(fila.curso_id, {
+        cursoId: fila.curso_id,
+        cursoNombre: fila.curso_nombre,
+        asignaturas: asignaturasPorCurso[fila.curso_id] ?? [],
+        estudiantes: [],
+      });
+    }
+
+    if (fila.estudiante_id) {
+      cursosMap.get(fila.curso_id).estudiantes.push({
+        estudianteId: fila.estudiante_id,
+        estudianteNombre: fila.estudiante_nombre,
+        documento: fila.documento,
+        asistencias: asistenciasPorEstudiante[String(fila.estudiante_id)] ?? [],
+      });
+    }
+  }
+
+  return Array.from(cursosMap.values());
 };
 
 module.exports = {
@@ -228,4 +398,5 @@ module.exports = {
   deleteAsistencia,
   getResumen,
   getCatalog,
+  findPorCurso,
 };

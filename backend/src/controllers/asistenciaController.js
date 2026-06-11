@@ -6,6 +6,7 @@ const getAllAsistencias = async (req, res, next) => {
   try {
     const asistencias = await asistenciaModel.findAll({
       cursoId: req.query.cursoId || null,
+      asignaturaId: req.query.asignaturaId || null,
       fecha: req.query.fecha || null,
       estudianteId: req.query.estudianteId || null,
       profesorId: req.query.profesorId || null,
@@ -19,6 +20,20 @@ const getAllAsistencias = async (req, res, next) => {
       ok: true,
       message: "Asistencias obtenidas correctamente.",
       data: asistencias,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getAsistenciasPorCurso = async (req, res, next) => {
+  try {
+    return res.json({
+      ok: true,
+      data: await asistenciaModel.findPorCurso({
+        periodoId: req.query.periodoId ? Number(req.query.periodoId) : null,
+        profesorPersonaId: req.query.profesorPersonaId || null,
+      }),
     });
   } catch (error) {
     return next(error);
@@ -156,6 +171,7 @@ const getResumenAsistencias = async (req, res, next) => {
       ok: true,
       data: await asistenciaModel.getResumen({
         cursoId: req.query.cursoId || null,
+        asignaturaId: req.query.asignaturaId || null,
         fecha: req.query.fecha || null,
         profesorPersonaId: req.query.profesorPersonaId || null,
       }),
@@ -175,6 +191,7 @@ const getAsistenciaCatalog = async (req, res, next) => {
 
 module.exports = {
   getAllAsistencias,
+  getAsistenciasPorCurso,
   getAsistenciaById,
   createAsistencia,
   updateAsistencia,
