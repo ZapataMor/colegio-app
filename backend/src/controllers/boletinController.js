@@ -32,7 +32,30 @@ const getBoletinByStudent = async (req, res, next) => {
   }
 };
 
+const generateBoletinesByCourse = async (req, res, next) => {
+  try {
+    const cursoId = Number(req.body.cursoId);
+    const periodoId = req.body.periodoId ? Number(req.body.periodoId) : null;
+
+    if (!cursoId) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID de salon invalido.",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: "Boletines generados correctamente.",
+      data: await boletinModel.generateByCourse(cursoId, periodoId),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getBoletinCatalog,
   getBoletinByStudent,
+  generateBoletinesByCourse,
 };

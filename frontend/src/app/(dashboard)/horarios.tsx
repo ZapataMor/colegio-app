@@ -43,14 +43,39 @@ type Horario = {
   profesor_apellidos: string;
 };
 
+type SalonCatalog = { id: number; nombre: string; ubicacion: string | null };
+
 type Catalog = {
   cursos: { id: number; nombre: string }[];
   profesores: { id: number; nombre: string }[];
   asignaturas: { id: number; nombre: string }[];
-  salones: { id: number; nombre: string; ubicacion: string | null }[];
+  salones: SalonCatalog[];
 };
 
-const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes'];
+type TimeSlot = {
+  key: string;
+  start: string;
+  end: string;
+  label: string;
+};
+
+type ScheduleRow = {
+  slot: TimeSlot;
+  cells: { dia: string; horario: Horario | null }[];
+};
+
+const DIAS = [
+  { value: 'lunes', label: 'Lunes' },
+  { value: 'martes', label: 'Martes' },
+  { value: 'miercoles', label: 'Miercoles' },
+  { value: 'jueves', label: 'Jueves' },
+  { value: 'viernes', label: 'Viernes' },
+];
+
+const COL = {
+  hora: 96,
+  dia: 154,
+};
 
 const emptyForm = {
   cursoId: '',
@@ -69,10 +94,10 @@ export default function HorariosScreen() {
   const canManage = session?.rol === 'administrador' || session?.rol === 'profesor';
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [catalog, setCatalog] = useState<Catalog>({ cursos: [], profesores: [], asignaturas: [], salones: [] });
+  const [selectedSalonId, setSelectedSalonId] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
-  const [selectedDay, setSelectedDay] = useState('lunes');
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<Horario | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -103,31 +128,96 @@ export default function HorariosScreen() {
     loadData();
   }, [loadData]);
 
-  const filtered = useMemo(
-    () => horarios.filter((item) => item.dia_semana === selectedDay),
-    [horarios, selectedDay]
+  const visibleSalones = useMemo(() => {
+    if (session?.rol !== 'profesor') return catalog.salones;
+
+    const salonesConClase = new Set(horarios.map((item) => String(item.salon_id)));
+    const asignados = catalog.salones.filter((salon) => salonesConClase.has(String(salon.id)));
+    return asignados.length > 0 ? asignados : catalog.salones;
+  }, [catalog.salones, horarios, session?.rol]);
+
+  useEffect(() => {
+    if (visibleSalones.length === 0) {
+      if (selectedSalonId) setSelectedSalonId('');
+      return;
+    }
+
+    const selectedExists = visibleSalones.some((salon) => String(salon.id) === selectedSalonId);
+    if (selectedExists) return;
+
+    const firstScheduled = visibleSalones.find((salon) =>
+      horarios.some((item) => item.salon_id === salon.id)
+    );
+    setSelectedSalonId(String((firstScheduled ?? visibleSalones[0]).id));
+  }, [horarios, selectedSalonId, visibleSalones]);
+
+  const selectedSalon = useMemo(
+    () => visibleSalones.find((salon) => String(salon.id) === selectedSalonId) ?? null,
+    [selectedSalonId, visibleSalones]
+  );
+
+  const salonHorarios = useMemo(
+    () => horarios.filter((item) => String(item.salon_id) === selectedSalonId),
+    [horarios, selectedSalonId]
   );
 
   const stats = useMemo(() => {
-    const cursos = new Set(horarios.map((item) => item.curso_id)).size;
-    const docentes = new Set(horarios.map((item) => item.profesor_id)).size;
-    const salones = new Set(horarios.map((item) => item.salon_id)).size;
+    const cursos = new Set(salonHorarios.map((item) => item.curso_id)).size;
+    const docentes = new Set(salonHorarios.map((item) => item.profesor_id)).size;
+    const dias = new Set(salonHorarios.map((item) => item.dia_semana)).size;
     return {
-      bloques: horarios.length,
+      bloques: salonHorarios.length,
       cursos,
       docentes,
-      salones,
+      dias,
     };
-  }, [horarios]);
+  }, [salonHorarios]);
 
-  const openCreate = () => {
+  const timeSlots = useMemo(() => {
+    const slots = new Map<string, TimeSlot>();
+
+    for (const item of salonHorarios) {
+      const key = `${item.hora_inicio}-${item.hora_fin}`;
+      if (!slots.has(key)) {
+        slots.set(key, {
+          key,
+          start: item.hora_inicio,
+          end: item.hora_fin,
+          label: `${sliceTime(item.hora_inicio)} - ${sliceTime(item.hora_fin)}`,
+        });
+      }
+    }
+
+    return Array.from(slots.values()).sort(
+      (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end)
+    );
+  }, [salonHorarios]);
+
+  const scheduleRows = useMemo<ScheduleRow[]>(() => {
+    const byCell = new Map<string, Horario>();
+
+    for (const item of salonHorarios) {
+      byCell.set(`${item.dia_semana}-${item.hora_inicio}-${item.hora_fin}`, item);
+    }
+
+    return timeSlots.map((slot) => ({
+      slot,
+      cells: DIAS.map((dia) => ({
+        dia: dia.value,
+        horario: byCell.get(`${dia.value}-${slot.start}-${slot.end}`) ?? null,
+      })),
+    }));
+  }, [salonHorarios, timeSlots]);
+
+  const openCreate = (overrides: Partial<typeof emptyForm> = {}) => {
     setEditing(null);
     setForm({
       ...emptyForm,
       cursoId: String(catalog.cursos[0]?.id ?? ''),
       profesorId: String(catalog.profesores[0]?.id ?? ''),
       asignaturaId: String(catalog.asignaturas[0]?.id ?? ''),
-      salonId: String(catalog.salones[0]?.id ?? ''),
+      salonId: selectedSalonId || String(visibleSalones[0]?.id ?? catalog.salones[0]?.id ?? ''),
+      ...overrides,
     });
     setModalVisible(true);
   };
@@ -171,6 +261,7 @@ export default function HorariosScreen() {
       } else {
         await apiFetch('/api/horarios', { method: 'POST', body });
       }
+      setSelectedSalonId(String(body.salonId));
       setModalVisible(false);
       await loadData();
     } catch (err) {
@@ -215,13 +306,13 @@ export default function HorariosScreen() {
               Horarios
             </ThemedText>
             <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              Visual semanal clara para cursos, docentes y espacios sin cruces invisibles.
+              Selecciona un salon y revisa su semana por horas, asignaturas y docentes.
             </ThemedText>
           </View>
         </View>
       </View>
 
-      <ModuleHeader title="Horario semanal" onAdd={canManage ? openCreate : undefined} addLabel="+ Bloque" />
+      <ModuleHeader title="Horario semanal por salon" onAdd={canManage ? () => openCreate() : undefined} addLabel="+ Bloque" />
 
       {loading ? (
         <SkeletonList />
@@ -249,51 +340,42 @@ export default function HorariosScreen() {
             <StatCard label="Bloques" value={String(stats.bloques)} />
             <StatCard label="Cursos" value={String(stats.cursos)} />
             <StatCard label="Docentes" value={String(stats.docentes)} />
-            <StatCard label="Salones" value={String(stats.salones)} />
+            <StatCard label="Dias" value={String(stats.dias)} />
           </View>
 
-          <OptionChips
-            label="Dia"
-            options={DIAS.map((dia) => ({ value: dia, label: capitalize(dia) }))}
-            value={selectedDay}
-            onChange={setSelectedDay}
-          />
+          {visibleSalones.length === 0 ? (
+            <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+              <ThemedText style={{ color: theme.textSecondary }}>
+                No hay salones activos para mostrar horarios.
+              </ThemedText>
+            </ThemedView>
+          ) : (
+            <>
+              <OptionChips
+                label="Salon de clases"
+                options={visibleSalones.map((salon) => ({ value: String(salon.id), label: salon.nombre }))}
+                value={selectedSalonId}
+                onChange={setSelectedSalonId}
+              />
 
-          <View style={styles.cards}>
-            {filtered.length === 0 ? (
-              <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
-                <ThemedText style={{ color: theme.textSecondary }}>
-                  No hay bloques registrados para {capitalize(selectedDay)}.
-                </ThemedText>
-              </ThemedView>
-            ) : (
-              filtered.map((item) => (
-                <Pressable key={item.id} onPress={() => canManage && openEdit(item)} onLongPress={() => canManage && handleDelete(item)}>
-                  <ThemedView type="backgroundElement" style={[styles.scheduleCard, { borderColor: theme.border }]}>
-                    <View style={styles.cardTop}>
-                      <View style={styles.cardTitleBlock}>
-                        <ThemedText type="subtitle" style={styles.cardTitle}>
-                          {item.asignatura_nombre}
-                        </ThemedText>
-                        <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                          {item.curso_nombre} · {item.profesor_nombres} {item.profesor_apellidos}
-                        </ThemedText>
-                      </View>
-                      <View style={[styles.statusPill, { backgroundColor: `${theme.primary}18` }]}>
-                        <ThemedText type="small" style={{ color: theme.primary }}>
-                          {item.estado}
-                        </ThemedText>
-                      </View>
-                    </View>
-                    <View style={styles.metaRow}>
-                      <Meta icon={ClockIcon} text={`${sliceTime(item.hora_inicio)} - ${sliceTime(item.hora_fin)}`} />
-                      <Meta icon={MapPinIcon} text={`${item.salon_nombre}${item.salon_ubicacion ? ` · ${item.salon_ubicacion}` : ''}`} />
-                    </View>
-                  </ThemedView>
-                </Pressable>
-              ))
-            )}
-          </View>
+              <RoomSummary salon={selectedSalon} bloques={salonHorarios.length} />
+
+              <WeeklyScheduleTable
+                canManage={canManage}
+                rows={scheduleRows}
+                onCreate={(dia, slot) =>
+                  openCreate({
+                    salonId: selectedSalonId,
+                    diaSemana: dia,
+                    horaInicio: slot.start,
+                    horaFin: slot.end,
+                  })
+                }
+                onDelete={handleDelete}
+                onEdit={openEdit}
+              />
+            </>
+          )}
         </ScrollView>
       )}
 
@@ -330,7 +412,7 @@ export default function HorariosScreen() {
               />
               <OptionChips
                 label="Dia"
-                options={DIAS.map((dia) => ({ value: dia, label: capitalize(dia) }))}
+                options={DIAS.map((dia) => ({ value: dia.value, label: dia.label }))}
                 value={form.diaSemana}
                 onChange={(diaSemana) => setForm((prev) => ({ ...prev, diaSemana }))}
               />
@@ -352,6 +434,155 @@ export default function HorariosScreen() {
   );
 }
 
+function RoomSummary({ salon, bloques }: { salon: SalonCatalog | null; bloques: number }) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.roomSummary, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}20` }]}>
+        <MapPinIcon width={18} height={18} color={theme.primary} />
+      </View>
+      <View style={styles.roomCopy}>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          Salon seleccionado
+        </ThemedText>
+        <ThemedText style={[styles.roomName, { color: theme.text }]}>
+          {salon?.nombre ?? 'Sin salon'}
+        </ThemedText>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {salon?.ubicacion ?? 'Sin ubicacion'} - {bloques} bloque{bloques === 1 ? '' : 's'}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+function WeeklyScheduleTable({
+  rows,
+  canManage,
+  onCreate,
+  onDelete,
+  onEdit,
+}: {
+  rows: ScheduleRow[];
+  canManage: boolean;
+  onCreate: (dia: string, slot: TimeSlot) => void;
+  onDelete: (item: Horario) => void;
+  onEdit: (item: Horario) => void;
+}) {
+  const theme = useTheme();
+  const tableWidth = COL.hora + DIAS.length * COL.dia;
+
+  if (rows.length === 0) {
+    return (
+      <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+        <ThemedText style={{ color: theme.textSecondary }}>
+          No hay bloques registrados para este salon.
+        </ThemedText>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ThemedView type="backgroundElement" style={[styles.tableShell, { borderColor: theme.border }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator>
+        <View style={{ minWidth: tableWidth }}>
+          <View style={[styles.tableHeader, { backgroundColor: theme.surfaceMuted, borderBottomColor: theme.border }]}>
+            <View style={[styles.timeHeader, { borderRightColor: theme.border }]}>
+              <ClockIcon width={15} height={15} color={theme.textSecondary} />
+              <ThemedText type="smallBold" style={{ color: theme.textSecondary }}>
+                Hora
+              </ThemedText>
+            </View>
+            {DIAS.map((dia) => (
+              <View key={dia.value} style={[styles.dayHeader, { borderRightColor: theme.border }]}>
+                <ThemedText type="smallBold" style={{ color: theme.text }}>
+                  {dia.label}
+                </ThemedText>
+              </View>
+            ))}
+          </View>
+
+          {rows.map((row) => (
+            <View key={row.slot.key} style={[styles.tableRow, { borderBottomColor: theme.border }]}>
+              <View style={[styles.timeCell, { borderRightColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+                <ThemedText style={[styles.timeText, { color: theme.text }]}>{row.slot.label}</ThemedText>
+              </View>
+              {row.cells.map((cell) => (
+                <ScheduleCell
+                  key={`${row.slot.key}-${cell.dia}`}
+                  canManage={canManage}
+                  dia={cell.dia}
+                  horario={cell.horario}
+                  slot={row.slot}
+                  onCreate={onCreate}
+                  onDelete={onDelete}
+                  onEdit={onEdit}
+                />
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
+function ScheduleCell({
+  canManage,
+  dia,
+  horario,
+  slot,
+  onCreate,
+  onDelete,
+  onEdit,
+}: {
+  canManage: boolean;
+  dia: string;
+  horario: Horario | null;
+  slot: TimeSlot;
+  onCreate: (dia: string, slot: TimeSlot) => void;
+  onDelete: (item: Horario) => void;
+  onEdit: (item: Horario) => void;
+}) {
+  const theme = useTheme();
+  const disabled = !canManage;
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={() => {
+        if (horario) {
+          onEdit(horario);
+        } else {
+          onCreate(dia, slot);
+        }
+      }}
+      onLongPress={() => horario && onDelete(horario)}
+      style={[styles.dayCell, { borderRightColor: theme.border }]}>
+      {horario ? (
+        <View style={[styles.blockContent, { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}55` }]}>
+          <ThemedText style={[styles.subjectText, { color: theme.text }]} numberOfLines={2}>
+            {horario.asignatura_nombre}
+          </ThemedText>
+          <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={2}>
+            {getProfesorNombre(horario)}
+          </ThemedText>
+          <ThemedText type="small" style={[styles.courseText, { color: theme.primary }]} numberOfLines={1}>
+            {horario.curso_nombre}
+          </ThemedText>
+        </View>
+      ) : (
+        <View style={[styles.freeSlot, { backgroundColor: theme.surfaceMuted }]}>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            Libre
+          </ThemedText>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 function StatCard({ label, value }: { label: string; value: string }) {
   const theme = useTheme();
   return (
@@ -361,18 +592,6 @@ function StatCard({ label, value }: { label: string; value: string }) {
       </ThemedText>
       <ThemedText style={[styles.statValue, { color: theme.text }]}>{value}</ThemedText>
     </ThemedView>
-  );
-}
-
-function Meta({ icon: Icon, text }: { icon: typeof ClockIcon; text: string }) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.metaItem, { backgroundColor: theme.surfaceMuted }]}>
-      <Icon width={14} height={14} color={theme.textSecondary} />
-      <ThemedText type="small" style={{ color: theme.textSecondary }}>
-        {text}
-      </ThemedText>
-    </View>
   );
 }
 
@@ -386,8 +605,8 @@ function sliceTime(value: string) {
   return value.slice(0, 5);
 }
 
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function getProfesorNombre(item: Horario) {
+  return `${item.profesor_nombres} ${item.profesor_apellidos}`.trim();
 }
 
 const styles = StyleSheet.create({
@@ -429,15 +648,67 @@ const styles = StyleSheet.create({
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   statCard: { flex: 1, minWidth: 130, borderRadius: 20, borderWidth: 1, padding: Spacing.three },
   statValue: { fontSize: 28, fontWeight: '700', marginTop: 6 },
-  cards: { gap: Spacing.two },
-  scheduleCard: { borderRadius: 24, borderWidth: 1, padding: Spacing.three, gap: Spacing.two },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
-  cardTitleBlock: { flex: 1, gap: 2 },
-  cardTitle: { fontSize: 24, lineHeight: 30 },
-  statusPill: { borderRadius: 999, paddingHorizontal: Spacing.two, paddingVertical: 6, alignSelf: 'flex-start' },
-  metaRow: { gap: Spacing.two },
-  metaItem: { flexDirection: 'row', gap: 6, alignItems: 'center', paddingHorizontal: Spacing.two, paddingVertical: 8, borderRadius: 14 },
-  emptyCard: { borderRadius: 22, borderWidth: 1, padding: Spacing.four, alignItems: 'center' },
+  roomSummary: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  roomIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  roomCopy: { flex: 1, minWidth: 0 },
+  roomName: { fontSize: 19, lineHeight: 25, fontWeight: '700' },
+  tableShell: { borderRadius: 8, borderWidth: 1, overflow: 'hidden' },
+  tableHeader: { minHeight: 46, flexDirection: 'row', borderBottomWidth: 1 },
+  timeHeader: {
+    width: COL.hora,
+    paddingHorizontal: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    borderRightWidth: 1,
+  },
+  dayHeader: {
+    width: COL.dia,
+    paddingHorizontal: Spacing.two,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+  },
+  tableRow: { minHeight: 104, flexDirection: 'row', borderBottomWidth: 1 },
+  timeCell: {
+    width: COL.hora,
+    paddingHorizontal: Spacing.two,
+    justifyContent: 'center',
+    borderRightWidth: 1,
+  },
+  timeText: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  dayCell: {
+    width: COL.dia,
+    minHeight: 104,
+    padding: Spacing.two,
+    borderRightWidth: 1,
+  },
+  blockContent: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: Spacing.two,
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  subjectText: { fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  courseText: { fontWeight: '800' },
+  freeSlot: {
+    flex: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 74,
+  },
+  emptyCard: { borderRadius: 8, borderWidth: 1, padding: Spacing.four, alignItems: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(9, 20, 29, 0.45)', justifyContent: 'flex-end' },
   modalContent: {
     maxHeight: '90%',

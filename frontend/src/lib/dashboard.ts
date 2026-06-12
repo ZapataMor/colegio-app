@@ -32,13 +32,6 @@ export const MODULOS_ADMIN: Modulo[] = [
     ruta: '/(dashboard)/boletines',
   },
   {
-    id: 'comunicados',
-    nombre: 'Comunicados',
-    descripcion: 'Circulares y anuncios segmentados por rol o curso',
-    icon: CrudIcons.megaphone,
-    ruta: '/(dashboard)/comunicados',
-  },
-  {
     id: 'horarios',
     nombre: 'Horarios',
     descripcion: 'Planeacion semanal de cursos, docentes y salones',
@@ -118,13 +111,6 @@ export const MODULOS_PROFESOR: Modulo[] = [
     icon: CrudIcons.document,
     ruta: '/(dashboard)/boletines',
   },
-  {
-    id: 'comunicados',
-    nombre: 'Comunicados',
-    descripcion: 'Publica recordatorios y novedades para tu comunidad.',
-    icon: CrudIcons.megaphone,
-    ruta: '/(dashboard)/comunicados',
-  },
 ];
 
 export const MODULOS_ESTUDIANTE: Modulo[] = [
@@ -141,13 +127,6 @@ export const MODULOS_ESTUDIANTE: Modulo[] = [
     descripcion: 'Consulta tu historial de asistencia por materia.',
     icon: CrudIcons.checkCircle,
     ruta: '/(dashboard)/mis-asistencias',
-  },
-  {
-    id: 'comunicados',
-    nombre: 'Comunicados',
-    descripcion: 'Revisa avisos y recordatorios institucionales.',
-    icon: CrudIcons.megaphone,
-    ruta: '/(dashboard)/comunicados',
   },
 ];
 
@@ -166,31 +145,24 @@ export const MODULOS_ACUDIENTE: Modulo[] = [
     icon: CrudIcons.checkCircle,
     ruta: '/(dashboard)/mis-asistencias',
   },
-  {
-    id: 'comunicados',
-    nombre: 'Comunicados',
-    descripcion: 'Consulta circulares y mensajes del colegio.',
-    icon: CrudIcons.megaphone,
-    ruta: '/(dashboard)/comunicados',
-  },
 ];
 
 export const WELCOME_BY_ROLE: Record<string, { titulo: string; subtitulo: string }> = {
   administrador: {
     titulo: 'Panel de administracion',
-    subtitulo: 'Gestiona matriculas, agenda academica, comunicados y recursos del colegio.',
+    subtitulo: 'Gestiona matriculas, agenda academica y recursos del colegio.',
   },
   profesor: {
     titulo: 'Panel docente',
-    subtitulo: 'Consulta tus horarios, registra asistencia y comparte novedades con la comunidad.',
+    subtitulo: 'Consulta tus horarios y registra asistencia diaria.',
   },
   estudiante: {
     titulo: 'Panel estudiante',
-    subtitulo: 'Consulta avisos institucionales y prepara tu experiencia academica digital.',
+    subtitulo: 'Consulta tu informacion academica y prepara tu experiencia digital.',
   },
   acudiente: {
     titulo: 'Panel acudiente',
-    subtitulo: 'Sigue comunicados y mantente cerca del ritmo escolar de tus acudidos.',
+    subtitulo: 'Consulta el seguimiento academico de tus acudidos.',
   },
 };
 

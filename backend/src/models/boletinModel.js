@@ -1,9 +1,24 @@
 const pool = require("../config/db");
 
 const findCatalog = async () => {
+  const [cursos] = await pool.query(
+    `SELECT
+      c.id,
+      c.nombre,
+      c.nivel,
+      c.jornada,
+      COUNT(e.id) AS estudiantes_total
+    FROM cursos c
+    LEFT JOIN estudiantes e ON e.curso_id = c.id AND e.estado IN ('activo', 'egresado')
+    WHERE c.estado = 'activo'
+    GROUP BY c.id, c.nombre, c.nivel, c.jornada
+    ORDER BY c.nombre ASC`
+  );
+
   const [estudiantes] = await pool.query(
     `SELECT
       e.id,
+      e.curso_id,
       CONCAT(p.nombres, ' ', p.apellidos) AS nombre,
       p.documento,
       c.nombre AS curso_nombre
@@ -20,7 +35,7 @@ const findCatalog = async () => {
     ORDER BY fecha_inicio DESC`
   );
 
-  return { estudiantes, periodos };
+  return { cursos, estudiantes, periodos };
 };
 
 const findPeriodo = async (periodoId = null) => {
@@ -174,7 +189,37 @@ const buildBoletin = async (estudianteId, periodoId = null) => {
   };
 };
 
+const generateByCourse = async (cursoId, periodoId = null) => {
+  const periodo = await findPeriodo(periodoId);
+
+  if (!periodo) {
+    throw Object.assign(new Error("No hay periodos academicos configurados."), { statusCode: 404 });
+  }
+
+  const [estudiantes] = await pool.query(
+    `SELECT e.id
+    FROM estudiantes e
+    WHERE e.curso_id = ? AND e.estado IN ('activo', 'egresado')
+    ORDER BY e.id ASC`,
+    [cursoId]
+  );
+
+  if (estudiantes.length === 0) {
+    throw Object.assign(new Error("El salon seleccionado no tiene estudiantes activos."), { statusCode: 404 });
+  }
+
+  await Promise.all(estudiantes.map((estudiante) => buildBoletin(estudiante.id, periodo.id)));
+
+  return {
+    cursoId,
+    periodo,
+    estudiantesGenerados: estudiantes.length,
+    estudiantes: estudiantes.map((estudiante) => estudiante.id),
+  };
+};
+
 module.exports = {
   findCatalog,
   buildBoletin,
+  generateByCourse,
 };
