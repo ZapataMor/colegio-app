@@ -169,7 +169,26 @@ export default function MatriculaScreen() {
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
-      <View style={styles.tabs}>
+      <ThemedView type="backgroundElement" style={[styles.hero, { borderColor: theme.border }]}>
+        <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}24` }]}>
+          <AcademicCapIcon width={20} height={20} color={theme.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
+            Gestion academica
+          </ThemedText>
+          <ThemedText style={styles.title}>Matriculas {ANIO_ACTUAL}</ThemedText>
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            {matriculas.length} matricula{matriculas.length !== 1 ? 's' : ''} - Periodo activo
+          </ThemedText>
+        </View>
+        <Pressable onPress={startCreate} style={[styles.addBtn, { backgroundColor: theme.primary }]}>
+          <PlusIcon width={16} height={16} color={theme.primaryText} />
+          <ThemedText style={[styles.addBtnText, { color: theme.primaryText }]}>Nueva</ThemedText>
+        </Pressable>
+      </ThemedView>
+
+      <View style={[styles.tabs, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }]}>
         <TabButton active={tab === 'lista'} label="Lista" onPress={() => setTab('lista')} />
         <TabButton active={tab === 'registro'} label="Registro" onPress={startCreate} />
         <TabButton active={tab === 'detalle'} label="Detalle" onPress={() => setTab('detalle')} />
@@ -208,18 +227,6 @@ export default function MatriculaScreen() {
             />
           }
           contentContainerStyle={styles.listScreen}>
-          <ThemedView type="backgroundElement" style={styles.summaryCard}>
-            <View style={styles.summaryIcon}>
-              <AcademicCapIcon width={18} height={18} color={theme.primary} />
-            </View>
-            <View>
-              <ThemedText style={styles.summaryTitle}>Matriculas {ANIO_ACTUAL}</ThemedText>
-              <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                Gestion academica - Periodo activo
-              </ThemedText>
-            </View>
-          </ThemedView>
-
           <View style={styles.metricsGrid}>
             <Metric label="Total" value={metrics.total} />
             <Metric label="Activas" value={metrics.activas} tone="ok" />
@@ -504,21 +511,22 @@ function Timeline({ icon: Icon, title, date, note }: { icon: typeof CalendarDays
 
 const styles = StyleSheet.create({
   shellContent: { gap: Spacing.two },
-  tabs: { flexDirection: 'row', gap: Spacing.two },
+  hero: { borderWidth: 1, borderRadius: 8, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  heroIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  kicker: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  title: { fontSize: 20, fontWeight: '600' },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.two, paddingVertical: 8, borderRadius: 6 },
+  addBtnText: { fontWeight: '600', fontSize: 13 },
+  tabs: { flexDirection: 'row', gap: 4, padding: 4, borderWidth: 1, borderRadius: 10 },
   tabButton: {
     flex: 1,
-    minHeight: 34,
-    borderWidth: 1,
-    borderColor: '#B8BEC8',
-    borderRadius: 5,
+    minHeight: 36,
+    borderRadius: 7,
     alignItems: 'center',
     justifyContent: 'center',
   },
   tabText: { fontWeight: '500', fontSize: 13 },
   listScreen: { gap: Spacing.two, paddingBottom: Spacing.five },
-  summaryCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, padding: Spacing.three, borderRadius: 7 },
-  summaryIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(121,208,242,0.22)' },
-  summaryTitle: { fontSize: 18, fontWeight: '600' },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   metricCard: { width: '48%', padding: Spacing.two, borderRadius: 6 },
   metricLabel: { fontSize: 11 },

@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import BuildingOffice2Icon from 'react-native-heroicons/outline/BuildingOffice2Icon';
 import MagnifyingGlassIcon from 'react-native-heroicons/outline/MagnifyingGlassIcon';
+import MapPinIcon from 'react-native-heroicons/outline/MapPinIcon';
 import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
 import PlusIcon from 'react-native-heroicons/outline/PlusIcon';
 import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
+import UsersIcon from 'react-native-heroicons/outline/UsersIcon';
 
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
@@ -42,10 +44,18 @@ const ESTADOS: { label: string; value: 'Todos' | SalonEstado }[] = [
   { label: 'Mantenimiento', value: 'mantenimiento' },
 ];
 
+const MANTENIMIENTO_COLOR = '#B86B00';
+
+const estadoVisual = (estado: SalonEstado, theme: ReturnType<typeof useTheme>) => {
+  if (estado === 'activo') return { color: theme.accent, label: 'Activo' };
+  if (estado === 'inactivo') return { color: theme.textSecondary, label: 'Inactivo' };
+  return { color: MANTENIMIENTO_COLOR, label: 'Mantenimiento' };
+};
+
 export default function SalonesScreen() {
   const theme = useTheme();
   const { width } = useWindowDimensions();
-  const cardWidth: DimensionValue = width < 560 ? '100%' : width < 920 ? '48%' : '31%';
+  const cardWidth: DimensionValue = width < 560 ? '100%' : width < 920 ? '48%' : '31.5%';
   const [salonesData, setSalonesData] = useState<Salon[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -94,6 +104,11 @@ export default function SalonesScreen() {
     const capacidad = salonesData.reduce((acc, s) => acc + Number(s.capacidad || 0), 0);
     return { total: salonesData.length, activos, mantenimiento, capacidad };
   }, [salonesData]);
+
+  const maxCapacidad = useMemo(
+    () => Math.max(1, ...salonesData.map((s) => Number(s.capacidad || 0))),
+    [salonesData]
+  );
 
   const grouped = useMemo(
     () =>
@@ -188,77 +203,112 @@ export default function SalonesScreen() {
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
-      <ThemedView type="backgroundElement" style={[styles.hero, { borderColor: theme.border }]}>
-        <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}24` }]}>
-          <BuildingOffice2Icon width={20} height={20} color={theme.primary} />
+      <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+        <View style={styles.heroGlowA} />
+        <View style={styles.heroGlowB} />
+        <View style={styles.heroTop}>
+          <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}20` }]}>
+            <BuildingOffice2Icon width={22} height={22} color={theme.primary} />
+          </View>
+          <View style={styles.heroCopy}>
+            <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
+              Gestion de espacios
+            </ThemedText>
+            <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
+              Salones
+            </ThemedText>
+            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+              Administra los espacios del colegio: capacidad, ubicacion y estado.
+            </ThemedText>
+          </View>
+          <Pressable onPress={openCreate} style={[styles.addButton, { backgroundColor: theme.primary }]}>
+            <PlusIcon width={16} height={16} color={theme.primaryText} />
+            <ThemedText style={[styles.addText, { color: theme.primaryText }]}>Nuevo</ThemedText>
+          </Pressable>
         </View>
-        <View style={{ flex: 1 }}>
-          <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>
-            Gestion de espacios
-          </ThemedText>
-          <ThemedText style={styles.title}>Salones</ThemedText>
-          <ThemedText type="small" style={{ color: theme.textSecondary }}>
-            Datos sincronizados con la base local.
-          </ThemedText>
-        </View>
-      </ThemedView>
+      </View>
 
       <View style={styles.metricsGrid}>
-        <Metric label="Total salones" value={stats.total} />
-        <Metric label="Activos" value={stats.activos} tone="ok" />
-        <Metric label="Mantenimiento" value={stats.mantenimiento} tone="warn" />
-        <Metric label="Capacidad total" value={stats.capacidad} />
+        <Metric label="Total salones" value={stats.total} accent={theme.primary} />
+        <Metric label="Activos" value={stats.activos} accent={theme.accent} />
+        <Metric label="Mantenimiento" value={stats.mantenimiento} accent={MANTENIMIENTO_COLOR} />
+        <Metric label="Capacidad total" value={stats.capacidad} accent={theme.text} />
       </View>
 
-      <View style={styles.controls}>
-        <View style={[styles.searchBox, { borderColor: theme.border }]}>
-          <MagnifyingGlassIcon width={16} height={16} color={theme.textSecondary} />
-          <TextInput
-            onChangeText={setSearch}
-            placeholder="Buscar salon o ubicacion"
-            placeholderTextColor={theme.textSecondary}
-            style={[styles.searchInput, { color: theme.text }]}
-            value={search}
-          />
-        </View>
-        {ESTADOS.map((item) => (
-          <Pressable
-            key={item.value}
-            onPress={() => setFilter(item.value)}
-            style={[styles.filterButton, filter === item.value && { backgroundColor: theme.primary }]}>
-            <ThemedText style={[styles.filterText, filter === item.value && { color: theme.primaryText }]}>
-              {item.label}
-            </ThemedText>
-          </Pressable>
-        ))}
-        <Pressable onPress={openCreate} style={styles.addButton}>
-          <PlusIcon width={14} height={14} color="#111" />
-          <ThemedText style={styles.addText}>Nuevo salon</ThemedText>
-        </Pressable>
+      <View style={[styles.searchBox, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+        <MagnifyingGlassIcon width={16} height={16} color={theme.textSecondary} />
+        <TextInput
+          onChangeText={setSearch}
+          placeholder="Buscar salon o ubicacion"
+          placeholderTextColor={theme.textSecondary}
+          style={[styles.searchInput, { color: theme.text }]}
+          value={search}
+        />
       </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}>
+        {ESTADOS.map((item) => {
+          const active = filter === item.value;
+          return (
+            <Pressable
+              key={item.value}
+              onPress={() => setFilter(item.value)}
+              style={[
+                styles.filterChip,
+                { borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.primary : theme.backgroundElement },
+              ]}>
+              <ThemedText style={[styles.filterText, { color: active ? theme.primaryText : theme.textSecondary }]}>
+                {item.label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {loading ? (
-        <ThemedView type="backgroundElement" style={styles.stateBox}>
+        <ThemedView type="backgroundElement" style={[styles.stateBox, { borderColor: theme.border }]}>
           <ActivityIndicator color={theme.primary} />
           <ThemedText type="small" style={{ color: theme.textSecondary }}>Cargando salones...</ThemedText>
         </ThemedView>
       ) : error ? (
-        <ThemedView type="backgroundElement" style={styles.stateBox}>
+        <ThemedView type="backgroundElement" style={[styles.stateBox, { borderColor: theme.border }]}>
           <ThemedText style={{ color: theme.danger }}>{error}</ThemedText>
           <Pressable onPress={loadSalones} style={[styles.modalButton, { borderColor: theme.border }]}>
             <ThemedText>Reintentar</ThemedText>
+          </Pressable>
+        </ThemedView>
+      ) : salones.length === 0 ? (
+        <ThemedView type="backgroundElement" style={[styles.stateBox, { borderColor: theme.border }]}>
+          <BuildingOffice2Icon width={26} height={26} color={theme.textSecondary} />
+          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+            No hay salones que coincidan con la busqueda.
+          </ThemedText>
+          <Pressable onPress={openCreate} style={[styles.modalButton, { borderColor: theme.primary }]}>
+            <ThemedText style={{ color: theme.primary }}>Crear salon</ThemedText>
           </Pressable>
         </ThemedView>
       ) : (
         <ScrollView contentContainerStyle={styles.sections}>
           {Object.entries(grouped).map(([ubicacion, items]) => (
             <View key={ubicacion} style={styles.section}>
-              <ThemedText type="small" style={styles.sectionTitle}>{ubicacion}</ThemedText>
+              <View style={styles.sectionHeader}>
+                <MapPinIcon width={14} height={14} color={theme.primary} />
+                <ThemedText type="smallBold" style={[styles.sectionTitle, { color: theme.text }]}>
+                  {ubicacion}
+                </ThemedText>
+                <View style={[styles.sectionCount, { backgroundColor: theme.surfaceMuted }]}>
+                  <ThemedText type="small" style={{ color: theme.textSecondary }}>{items.length}</ThemedText>
+                </View>
+              </View>
               <View style={styles.cardsGrid}>
                 {items.map((salon) => (
                   <SalonCard
                     key={salon.id}
                     cardWidth={cardWidth}
+                    maxCapacidad={maxCapacidad}
                     onDelete={() => deleteSalon(salon)}
                     onEdit={() => openEdit(salon)}
                     salon={salon}
@@ -295,7 +345,7 @@ export default function SalonesScreen() {
                 <Pressable
                   key={item.value}
                   onPress={() => setForm((f) => ({ ...f, estado: item.value as SalonEstado }))}
-                  style={[styles.statusOption, form.estado === item.value && { backgroundColor: theme.primary }]}>
+                  style={[styles.statusOption, { borderColor: theme.border }, form.estado === item.value && { backgroundColor: theme.primary, borderColor: theme.primary }]}>
                   <ThemedText style={[styles.statusOptionText, form.estado === item.value && { color: theme.primaryText }]}>
                     {item.label}
                   </ThemedText>
@@ -306,7 +356,7 @@ export default function SalonesScreen() {
               <Pressable disabled={saving} onPress={() => setModalVisible(false)} style={[styles.modalButton, { borderColor: theme.border }]}>
                 <ThemedText>Cancelar</ThemedText>
               </Pressable>
-              <Pressable disabled={saving} onPress={saveSalon} style={[styles.modalButton, { backgroundColor: theme.primary }]}>
+              <Pressable disabled={saving} onPress={saveSalon} style={[styles.modalButton, { backgroundColor: theme.primary, borderColor: theme.primary }]}>
                 {saving ? <ActivityIndicator color={theme.primaryText} /> : <ThemedText style={{ color: theme.primaryText }}>Guardar</ThemedText>}
               </Pressable>
             </View>
@@ -317,60 +367,79 @@ export default function SalonesScreen() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'warn' }) {
+function Metric({ label, value, accent }: { label: string; value: number; accent: string }) {
   const theme = useTheme();
-  const color = tone === 'ok' ? theme.accent : tone === 'warn' ? '#B86B00' : theme.text;
   return (
-    <ThemedView type="backgroundElement" style={styles.metric}>
-      <ThemedText type="small" style={styles.metricLabel}>{label}</ThemedText>
-      <ThemedText style={[styles.metricValue, { color }]}>{value}</ThemedText>
+    <ThemedView type="backgroundElement" style={[styles.metric, { borderColor: theme.border }]}>
+      <View style={styles.metricTop}>
+        <View style={[styles.metricDot, { backgroundColor: accent }]} />
+        <ThemedText type="small" style={[styles.metricLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
+      </View>
+      <ThemedText style={[styles.metricValue, { color: theme.text }]}>{value}</ThemedText>
     </ThemedView>
   );
 }
 
 function SalonCard({
   cardWidth,
+  maxCapacidad,
   onDelete,
   onEdit,
   salon,
 }: {
   cardWidth: DimensionValue;
+  maxCapacidad: number;
   onDelete: () => void;
   onEdit: () => void;
   salon: Salon;
 }) {
   const theme = useTheme();
-  const statusColor =
-    salon.estado === 'activo' ? theme.accent : salon.estado === 'inactivo' ? theme.textSecondary : theme.danger;
-  const statusLabel = salon.estado === 'activo' ? 'Activo' : salon.estado === 'inactivo' ? 'Inactivo' : 'Mantenimiento';
+  const estado = estadoVisual(salon.estado, theme);
+  const pct = Math.max(6, Math.round((Number(salon.capacidad || 0) / maxCapacidad) * 100));
 
   return (
     <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border, width: cardWidth }]}>
       <View style={styles.cardTop}>
-        <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}24` }]}>
-          <BuildingOffice2Icon width={16} height={16} color={theme.primary} />
+        <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}20` }]}>
+          <BuildingOffice2Icon width={18} height={18} color={theme.primary} />
         </View>
-        <ThemedText style={[styles.status, { color: statusColor, backgroundColor: `${statusColor}18` }]}>
-          {statusLabel}
+        <View style={[styles.statusPill, { backgroundColor: `${estado.color}1A` }]}>
+          <View style={[styles.statusDot, { backgroundColor: estado.color }]} />
+          <ThemedText type="small" style={[styles.statusText, { color: estado.color }]}>
+            {estado.label}
+          </ThemedText>
+        </View>
+      </View>
+
+      <ThemedText style={[styles.roomName, { color: theme.text }]} numberOfLines={1}>{salon.nombre}</ThemedText>
+      <View style={styles.locationRow}>
+        <MapPinIcon width={13} height={13} color={theme.textSecondary} />
+        <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+          {salon.ubicacion || 'Sin ubicacion'}
         </ThemedText>
       </View>
-      <ThemedText style={styles.roomName}>{salon.nombre}</ThemedText>
-      <ThemedText type="small" style={{ color: theme.textSecondary }}>
-        {salon.ubicacion || 'Sin ubicacion'}
-      </ThemedText>
-      <View style={styles.infoGrid}>
-        <Info label="Capacidad" value={`${salon.capacidad} alum.`} />
-        <Info label="Estado" value={statusLabel} />
+
+      <View style={styles.capacityBlock}>
+        <View style={styles.capacityRow}>
+          <View style={styles.capacityLabel}>
+            <UsersIcon width={13} height={13} color={theme.textSecondary} />
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>Capacidad</ThemedText>
+          </View>
+          <ThemedText type="smallBold" style={{ color: theme.text }}>{salon.capacidad} cupos</ThemedText>
+        </View>
+        <View style={[styles.gaugeTrack, { backgroundColor: theme.surfaceMuted }]}>
+          <View style={[styles.gaugeFill, { width: `${pct}%`, backgroundColor: theme.primary }]} />
+        </View>
       </View>
-      <View style={styles.footer}>
+
+      <View style={[styles.footer, { borderTopColor: theme.border }]}>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>ID #{salon.id}</ThemedText>
         <View style={styles.actions}>
-          <Pressable onPress={onEdit} style={styles.iconButton}>
-            <PencilSquareIcon width={14} height={14} color={theme.text} />
+          <Pressable onPress={onEdit} style={[styles.iconButton, { borderColor: theme.border }]}>
+            <PencilSquareIcon width={15} height={15} color={theme.text} />
           </Pressable>
-          <Pressable onPress={onDelete} style={[styles.deleteButton, { borderColor: `${theme.danger}66` }]}>
-            <TrashIcon width={14} height={14} color={theme.danger} />
-            <ThemedText type="small" style={{ color: theme.danger }}>Eliminar</ThemedText>
+          <Pressable onPress={onDelete} style={[styles.iconButton, { borderColor: `${theme.danger}55` }]}>
+            <TrashIcon width={15} height={15} color={theme.danger} />
           </Pressable>
         </View>
       </View>
@@ -404,70 +473,88 @@ function Field({
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <ThemedView type="backgroundElement" style={styles.info}>
-      <ThemedText type="small" style={styles.infoLabel}>{label}</ThemedText>
-      <ThemedText style={styles.infoValue}>{value}</ThemedText>
-    </ThemedView>
-  );
-}
-
 const styles = StyleSheet.create({
-  shellContent: { gap: Spacing.two },
+  shellContent: { gap: Spacing.three },
   hero: {
-    minHeight: 96,
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: Spacing.three,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
+    position: 'relative',
     overflow: 'hidden',
+    borderRadius: 28,
+    borderWidth: 1,
+    padding: Spacing.four,
   },
-  heroIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  kicker: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  title: { fontSize: 22, fontWeight: '600' },
+  heroGlowA: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 999,
+    top: -50,
+    right: -30,
+    backgroundColor: '#0F766E',
+    opacity: 0.12,
+  },
+  heroGlowB: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 999,
+    bottom: -50,
+    left: -20,
+    backgroundColor: '#79D0F2',
+    opacity: 0.16,
+  },
+  heroTop: { flexDirection: 'row', gap: Spacing.three, alignItems: 'flex-start' },
+  heroIcon: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  heroCopy: { flex: 1, gap: 4 },
+  kicker: { textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: '700' },
+  heroTitle: {},
+  heroSubtitle: { lineHeight: 21 },
+  addButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.two, paddingVertical: 9, borderRadius: 999 },
+  addText: { fontWeight: '700', fontSize: 13 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  metric: { flex: 1, minWidth: 110, padding: Spacing.two, borderRadius: 6 },
-  metricLabel: { fontSize: 11, opacity: 0.65 },
-  metricValue: { fontSize: 22, fontWeight: '600', marginTop: 4 },
-  controls: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, alignItems: 'center' },
-  searchBox: { flex: 1, minWidth: 220, minHeight: 38, borderWidth: 1, borderRadius: 5, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.two },
-  searchInput: { flex: 1, paddingVertical: 6 },
-  filterButton: { minHeight: 38, borderWidth: 1, borderColor: '#B8BEC8', borderRadius: 5, paddingHorizontal: Spacing.three, alignItems: 'center', justifyContent: 'center' },
-  filterText: { fontWeight: '500' },
-  addButton: { minHeight: 38, borderWidth: 1, borderColor: '#B8BEC8', borderRadius: 5, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Spacing.three },
-  addText: { fontWeight: '500' },
-  stateBox: { minHeight: 160, borderRadius: 8, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  sections: { gap: Spacing.three, paddingBottom: Spacing.five },
+  metric: { flex: 1, minWidth: 130, padding: Spacing.three, borderWidth: 1, borderRadius: 18 },
+  metricTop: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metricDot: { width: 8, height: 8, borderRadius: 999 },
+  metricLabel: { fontSize: 11 },
+  metricValue: { fontSize: 26, fontWeight: '800', marginTop: 8 },
+  searchBox: { minHeight: 44, borderWidth: 1, borderRadius: 14, flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three },
+  searchInput: { flex: 1, paddingVertical: 8 },
+  filterRow: { gap: Spacing.two, paddingVertical: 2, paddingRight: Spacing.two },
+  filterChip: { minHeight: 36, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.three, alignItems: 'center', justifyContent: 'center' },
+  filterText: { fontWeight: '600', fontSize: 13 },
+  stateBox: { minHeight: 180, borderWidth: 1, borderRadius: 20, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.four },
+  sections: { gap: Spacing.four, paddingBottom: Spacing.five },
   section: { gap: Spacing.two },
-  sectionTitle: { fontWeight: '600', opacity: 0.7, textTransform: 'uppercase' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionTitle: { textTransform: 'uppercase', letterSpacing: 0.6 },
+  sectionCount: { minWidth: 22, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, alignItems: 'center' },
   cardsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  card: { minWidth: 180, minHeight: 170, padding: Spacing.two, borderWidth: 1, borderRadius: 8, gap: 6 },
+  card: { minWidth: 200, padding: Spacing.three, borderWidth: 1, borderRadius: 20, gap: 8 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  roomIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  status: { fontSize: 10, fontWeight: '600', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 999 },
-  roomName: { fontWeight: '600' },
-  infoGrid: { flexDirection: 'row', gap: 6, marginTop: 4 },
-  info: { flex: 1, padding: 6, borderRadius: 5 },
-  infoLabel: { fontSize: 9, opacity: 0.6 },
-  infoValue: { fontSize: 11, fontWeight: '600' },
-  footer: { gap: Spacing.two, marginTop: 'auto' },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 },
-  iconButton: { width: 28, height: 28, borderWidth: 1, borderColor: '#C8CDD6', borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  deleteButton: { minHeight: 28, borderWidth: 1, borderRadius: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 8 },
-  emptyCard: { minWidth: 180, minHeight: 170, borderWidth: 1, borderStyle: 'dashed', borderRadius: 8, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center', padding: Spacing.three },
-  modalCard: { width: '100%', maxWidth: 560, borderWidth: 1, borderRadius: 8, padding: Spacing.three, gap: Spacing.two },
-  modalTitle: { fontSize: 20, fontWeight: '600' },
+  roomIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  statusDot: { width: 7, height: 7, borderRadius: 999 },
+  statusText: { fontWeight: '700', fontSize: 11 },
+  roomName: { fontWeight: '800', fontSize: 17 },
+  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  capacityBlock: { gap: 6, marginTop: 2 },
+  capacityRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  capacityLabel: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  gaugeTrack: { height: 6, borderRadius: 999, overflow: 'hidden' },
+  gaugeFill: { height: 6, borderRadius: 999 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, paddingTop: Spacing.two, marginTop: 2 },
+  actions: { flexDirection: 'row', gap: 6 },
+  iconButton: { width: 32, height: 32, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  emptyCard: { minWidth: 200, minHeight: 170, borderWidth: 1, borderStyle: 'dashed', borderRadius: 20, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(7,17,31,0.45)', alignItems: 'center', justifyContent: 'center', padding: Spacing.three },
+  modalCard: { width: '100%', maxWidth: 560, borderWidth: 1, borderRadius: 24, padding: Spacing.four, gap: Spacing.three },
+  modalTitle: { fontSize: 20, fontWeight: '700' },
   formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   field: { flexGrow: 1, flexBasis: 160, gap: 4 },
   fieldLabel: { opacity: 0.68 },
-  fieldInput: { minHeight: 40, borderWidth: 1, borderRadius: 6, paddingHorizontal: Spacing.two },
+  fieldInput: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: Spacing.three },
   statusPicker: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  statusOption: { minHeight: 34, borderWidth: 1, borderColor: '#B8BEC8', borderRadius: 999, paddingHorizontal: Spacing.two, alignItems: 'center', justifyContent: 'center' },
-  statusOptionText: { fontSize: 12, fontWeight: '500' },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Spacing.two, marginTop: Spacing.two },
-  modalButton: { minHeight: 40, minWidth: 110, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.three },
+  statusOption: { minHeight: 36, borderWidth: 1, borderRadius: 999, paddingHorizontal: Spacing.three, alignItems: 'center', justifyContent: 'center' },
+  statusOptionText: { fontSize: 12, fontWeight: '600' },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Spacing.two },
+  modalButton: { minHeight: 44, minWidth: 110, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.three },
 });

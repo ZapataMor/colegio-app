@@ -65,6 +65,19 @@ const periodos = [
   ["Periodo 4 - 2026", "2026-09-21", "2026-11-27", "inactivo"],
 ];
 
+// Dias y bloques horarios de la jornada escolar usados para generar los horarios.
+const DIAS_CLASE = ["lunes", "martes", "miercoles", "jueves", "viernes"];
+
+const BLOQUES_HORARIO = [
+  ["07:00:00", "07:55:00"],
+  ["08:00:00", "08:55:00"],
+  ["09:00:00", "09:55:00"],
+  // Descanso 09:55 - 10:20
+  ["10:20:00", "11:15:00"],
+  ["11:15:00", "12:10:00"],
+  ["12:10:00", "13:05:00"],
+];
+
 const profesores = [
   ["Diana Carolina", "Martinez Rojas", "810000001", "diana.martinez@colegio.com", "3001000001", "Matematicas", "Licenciada en Matematicas"],
   ["Andres Felipe", "Ramirez Torres", "810000002", "andres.ramirez@colegio.com", "3001000002", "Estadistica", "Magister en Educacion Matematica"],
@@ -585,6 +598,78 @@ const seedNotas = async ({ estudiantes, asignaturaByName, profesorByEspecialidad
   return totalNotas;
 };
 
+const seedHorarios = async ({ cursoByName, salonByName, asignaturaByName, profesorByEspecialidad }) => {
+  // Cada curso tiene su propio salon y su propio horario semanal.
+  const cursos = [];
+  for (let grado = 1; grado <= 11; grado += 1) {
+    for (const seccion of ["A", "B", "C"]) {
+      const nombre = cursoNombre(grado, seccion);
+      const cursoId = cursoByName[nombre];
+      const salonId = salonByName[`Salon ${nombre}`];
+      if (!cursoId || !salonId) continue;
+
+      // Solo asignaturas que tengan profesor y registro de asignatura disponibles.
+      const subjects = asignaturasPorGrado(grado).filter(
+        (s) => profesorByEspecialidad[s] && asignaturaByName[s]
+      );
+
+      cursos.push({ grado, seccion, nombre, cursoId, salonId, subjects, rot: 0, count: 0 });
+    }
+  }
+
+  // Estado limpio: regeneramos por completo los horarios cada vez que se siembra.
+  await execute(`DELETE FROM horarios`);
+
+  let total = 0;
+
+  for (const dia of DIAS_CLASE) {
+    for (const [horaInicio, horaFin] of BLOQUES_HORARIO) {
+      // Un profesor no puede dictar en dos cursos en el mismo dia/hora (uq_horario_profesor).
+      const profesoresOcupados = new Set();
+
+      // En cada bloque damos prioridad al curso con menos clases asignadas hasta el momento,
+      // para repartir los profesores de forma equilibrada entre todos los cursos.
+      const orden = [...cursos].sort((a, b) => a.count - b.count || a.cursoId - b.cursoId);
+
+      for (const curso of orden) {
+        const { subjects } = curso;
+        if (subjects.length === 0) continue;
+
+        for (let k = 0; k < subjects.length; k += 1) {
+          const idx = (curso.rot + k) % subjects.length;
+          const subjectName = subjects[idx];
+          const profesorId = profesorByEspecialidad[subjectName];
+
+          if (profesoresOcupados.has(profesorId)) continue;
+
+          await execute(
+            `INSERT INTO horarios
+              (curso_id, profesor_id, asignatura_id, salon_id, dia_semana, hora_inicio, hora_fin, estado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'activo')`,
+            [
+              curso.cursoId,
+              profesorId,
+              asignaturaByName[subjectName],
+              curso.salonId,
+              dia,
+              horaInicio,
+              horaFin,
+            ]
+          );
+
+          profesoresOcupados.add(profesorId);
+          curso.rot = (idx + 1) % subjects.length;
+          curso.count += 1;
+          total += 1;
+          break;
+        }
+      }
+    }
+  }
+
+  return total;
+};
+
 const seed = async () => {
   try {
     console.log("Iniciando seeding completo...\n");
@@ -600,6 +685,14 @@ const seed = async () => {
 
     const estudiantes = await seedEstudiantes(catalogos.roleByName, catalogos.cursoByName);
     console.log(`Estudiantes y matriculas listas: ${estudiantes.length}.`);
+
+    const totalHorarios = await seedHorarios({
+      cursoByName: catalogos.cursoByName,
+      salonByName: catalogos.salonByName,
+      asignaturaByName: catalogos.asignaturaByName,
+      profesorByEspecialidad,
+    });
+    console.log(`Horarios listos: ${totalHorarios}.`);
 
     await seedUsuariosDePrueba(catalogos.roleByName);
     console.log("Usuarios de prueba listos.");

@@ -151,3 +151,24 @@ Backend v2 personas+roles. Usuarios vinculan persona existente. Dashboard por ro
 
 ### Nota funcional
 - La impresion directa del boletin queda orientada a web/escritorio. En Expo Go movil se mantiene la vista de consulta, pero el flujo de impresion como tal se resuelve mejor en navegador.
+
+---
+
+## ACTUALIZACION v8 (11/06/2026 - Horarios por curso)
+
+### Frontend
+- `frontend/src/app/(dashboard)/horarios.tsx` reorganizado a un flujo centrado en cursos:
+  - Al entrar muestra la lista de cursos (ordenada por grado y seccion).
+  - Al seleccionar un curso muestra la tabla de horario semanal: dias en columnas, horas en filas y la asignatura/docente/salon en cada interseccion.
+  - Boton "Todos los cursos" para volver al listado y estadisticas por curso (bloques, asignaturas, docentes, dias).
+  - Para rol profesor, el listado solo muestra los cursos donde tiene clases asignadas.
+
+### Backend / Seed
+- `backend/scripts/seed.js` ahora genera horarios completos: cada curso (1A-11C) tiene su propio horario semanal definido.
+- Jornada de 6 bloques (07:00-13:05 con descanso) de lunes a viernes en su propio salon.
+- Asignacion balanceada que respeta las restricciones unicas (un profesor no dicta dos cursos a la misma hora). Resultado real: 390 horarios, 11-16 bloques por curso, 0 conflictos de profesor.
+
+### Validacion
+- `npx.cmd tsc --noEmit` OK.
+- `node --check scripts/seed.js` OK.
+- `node scripts/seed.js` OK contra MySQL local (sin violar restricciones de horario).

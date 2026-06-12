@@ -9,9 +9,11 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
 import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
+import ChevronLeftIcon from 'react-native-heroicons/outline/ChevronLeftIcon';
+import ChevronRightIcon from 'react-native-heroicons/outline/ChevronRightIcon';
 import ClockIcon from 'react-native-heroicons/outline/ClockIcon';
-import MapPinIcon from 'react-native-heroicons/outline/MapPinIcon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
@@ -36,6 +38,7 @@ type Horario = {
   hora_fin: string;
   estado: string;
   curso_nombre: string;
+  curso_nivel: string | null;
   asignatura_nombre: string;
   salon_nombre: string;
   salon_ubicacion: string | null;
@@ -43,10 +46,11 @@ type Horario = {
   profesor_apellidos: string;
 };
 
+type CursoCatalog = { id: number; nombre: string; nivel: string | null };
 type SalonCatalog = { id: number; nombre: string; ubicacion: string | null };
 
 type Catalog = {
-  cursos: { id: number; nombre: string }[];
+  cursos: CursoCatalog[];
   profesores: { id: number; nombre: string }[];
   asignaturas: { id: number; nombre: string }[];
   salones: SalonCatalog[];
@@ -94,7 +98,7 @@ export default function HorariosScreen() {
   const canManage = session?.rol === 'administrador' || session?.rol === 'profesor';
   const [horarios, setHorarios] = useState<Horario[]>([]);
   const [catalog, setCatalog] = useState<Catalog>({ cursos: [], profesores: [], asignaturas: [], salones: [] });
-  const [selectedSalonId, setSelectedSalonId] = useState('');
+  const [selectedCursoId, setSelectedCursoId] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
@@ -128,55 +132,52 @@ export default function HorariosScreen() {
     loadData();
   }, [loadData]);
 
-  const visibleSalones = useMemo(() => {
-    if (session?.rol !== 'profesor') return catalog.salones;
+  // Cursos visibles: para profesor solo aquellos donde tiene clases asignadas.
+  const visibleCursos = useMemo(() => {
+    const ordenar = (lista: CursoCatalog[]) =>
+      [...lista].sort((a, b) => compareCurso(a.nombre, b.nombre));
 
-    const salonesConClase = new Set(horarios.map((item) => String(item.salon_id)));
-    const asignados = catalog.salones.filter((salon) => salonesConClase.has(String(salon.id)));
-    return asignados.length > 0 ? asignados : catalog.salones;
-  }, [catalog.salones, horarios, session?.rol]);
+    if (session?.rol !== 'profesor') return ordenar(catalog.cursos);
 
-  useEffect(() => {
-    if (visibleSalones.length === 0) {
-      if (selectedSalonId) setSelectedSalonId('');
-      return;
+    const cursosConClase = new Set(horarios.map((item) => item.curso_id));
+    const propios = catalog.cursos.filter((curso) => cursosConClase.has(curso.id));
+    return ordenar(propios.length > 0 ? propios : catalog.cursos);
+  }, [catalog.cursos, horarios, session?.rol]);
+
+  const bloquesPorCurso = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const item of horarios) {
+      map.set(item.curso_id, (map.get(item.curso_id) ?? 0) + 1);
     }
+    return map;
+  }, [horarios]);
 
-    const selectedExists = visibleSalones.some((salon) => String(salon.id) === selectedSalonId);
-    if (selectedExists) return;
-
-    const firstScheduled = visibleSalones.find((salon) =>
-      horarios.some((item) => item.salon_id === salon.id)
-    );
-    setSelectedSalonId(String((firstScheduled ?? visibleSalones[0]).id));
-  }, [horarios, selectedSalonId, visibleSalones]);
-
-  const selectedSalon = useMemo(
-    () => visibleSalones.find((salon) => String(salon.id) === selectedSalonId) ?? null,
-    [selectedSalonId, visibleSalones]
+  const selectedCurso = useMemo(
+    () => visibleCursos.find((curso) => String(curso.id) === selectedCursoId) ?? null,
+    [selectedCursoId, visibleCursos]
   );
 
-  const salonHorarios = useMemo(
-    () => horarios.filter((item) => String(item.salon_id) === selectedSalonId),
-    [horarios, selectedSalonId]
+  const cursoHorarios = useMemo(
+    () => horarios.filter((item) => String(item.curso_id) === selectedCursoId),
+    [horarios, selectedCursoId]
   );
 
   const stats = useMemo(() => {
-    const cursos = new Set(salonHorarios.map((item) => item.curso_id)).size;
-    const docentes = new Set(salonHorarios.map((item) => item.profesor_id)).size;
-    const dias = new Set(salonHorarios.map((item) => item.dia_semana)).size;
+    const docentes = new Set(cursoHorarios.map((item) => item.profesor_id)).size;
+    const asignaturas = new Set(cursoHorarios.map((item) => item.asignatura_id)).size;
+    const dias = new Set(cursoHorarios.map((item) => item.dia_semana)).size;
     return {
-      bloques: salonHorarios.length,
-      cursos,
+      bloques: cursoHorarios.length,
+      asignaturas,
       docentes,
       dias,
     };
-  }, [salonHorarios]);
+  }, [cursoHorarios]);
 
   const timeSlots = useMemo(() => {
     const slots = new Map<string, TimeSlot>();
 
-    for (const item of salonHorarios) {
+    for (const item of cursoHorarios) {
       const key = `${item.hora_inicio}-${item.hora_fin}`;
       if (!slots.has(key)) {
         slots.set(key, {
@@ -191,12 +192,12 @@ export default function HorariosScreen() {
     return Array.from(slots.values()).sort(
       (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end)
     );
-  }, [salonHorarios]);
+  }, [cursoHorarios]);
 
   const scheduleRows = useMemo<ScheduleRow[]>(() => {
     const byCell = new Map<string, Horario>();
 
-    for (const item of salonHorarios) {
+    for (const item of cursoHorarios) {
       byCell.set(`${item.dia_semana}-${item.hora_inicio}-${item.hora_fin}`, item);
     }
 
@@ -207,16 +208,25 @@ export default function HorariosScreen() {
         horario: byCell.get(`${dia.value}-${slot.start}-${slot.end}`) ?? null,
       })),
     }));
-  }, [salonHorarios, timeSlots]);
+  }, [cursoHorarios, timeSlots]);
+
+  const salonIdForCurso = useCallback(
+    (cursoNombre: string | undefined) => {
+      if (!cursoNombre) return '';
+      const salon = catalog.salones.find((item) => item.nombre === `Salon ${cursoNombre}`);
+      return String(salon?.id ?? catalog.salones[0]?.id ?? '');
+    },
+    [catalog.salones]
+  );
 
   const openCreate = (overrides: Partial<typeof emptyForm> = {}) => {
     setEditing(null);
     setForm({
       ...emptyForm,
-      cursoId: String(catalog.cursos[0]?.id ?? ''),
+      cursoId: selectedCursoId || String(visibleCursos[0]?.id ?? catalog.cursos[0]?.id ?? ''),
       profesorId: String(catalog.profesores[0]?.id ?? ''),
       asignaturaId: String(catalog.asignaturas[0]?.id ?? ''),
-      salonId: selectedSalonId || String(visibleSalones[0]?.id ?? catalog.salones[0]?.id ?? ''),
+      salonId: salonIdForCurso(selectedCurso?.nombre),
       ...overrides,
     });
     setModalVisible(true);
@@ -261,7 +271,7 @@ export default function HorariosScreen() {
       } else {
         await apiFetch('/api/horarios', { method: 'POST', body });
       }
-      setSelectedSalonId(String(body.salonId));
+      setSelectedCursoId(String(body.cursoId));
       setModalVisible(false);
       await loadData();
     } catch (err) {
@@ -289,6 +299,10 @@ export default function HorariosScreen() {
     ]);
   };
 
+  const heroSubtitle = selectedCurso
+    ? `Horario semanal del curso ${selectedCurso.nombre} por horas, asignaturas y docentes.`
+    : 'Selecciona un curso para revisar su horario semanal de clases.';
+
   return (
     <ScreenShell contentStyle={styles.shellContent}>
       <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -306,13 +320,21 @@ export default function HorariosScreen() {
               Horarios
             </ThemedText>
             <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              Selecciona un salon y revisa su semana por horas, asignaturas y docentes.
+              {heroSubtitle}
             </ThemedText>
           </View>
         </View>
       </View>
 
-      <ModuleHeader title="Horario semanal por salon" onAdd={canManage ? () => openCreate() : undefined} addLabel="+ Bloque" />
+      {selectedCurso ? (
+        <ModuleHeader
+          title={`Horario - ${selectedCurso.nombre}`}
+          onAdd={canManage ? () => openCreate() : undefined}
+          addLabel="+ Bloque"
+        />
+      ) : (
+        <ModuleHeader title="Cursos" />
+      )}
 
       {loading ? (
         <SkeletonList />
@@ -336,36 +358,37 @@ export default function HorariosScreen() {
             />
           }
           contentContainerStyle={styles.page}>
-          <View style={styles.statsGrid}>
-            <StatCard label="Bloques" value={String(stats.bloques)} />
-            <StatCard label="Cursos" value={String(stats.cursos)} />
-            <StatCard label="Docentes" value={String(stats.docentes)} />
-            <StatCard label="Dias" value={String(stats.dias)} />
-          </View>
-
-          {visibleSalones.length === 0 ? (
-            <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
-              <ThemedText style={{ color: theme.textSecondary }}>
-                No hay salones activos para mostrar horarios.
-              </ThemedText>
-            </ThemedView>
+          {!selectedCurso ? (
+            <CursoList
+              cursos={visibleCursos}
+              bloquesPorCurso={bloquesPorCurso}
+              onSelect={(curso) => setSelectedCursoId(String(curso.id))}
+            />
           ) : (
             <>
-              <OptionChips
-                label="Salon de clases"
-                options={visibleSalones.map((salon) => ({ value: String(salon.id), label: salon.nombre }))}
-                value={selectedSalonId}
-                onChange={setSelectedSalonId}
-              />
+              <Pressable
+                onPress={() => setSelectedCursoId('')}
+                style={[styles.backButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+                <ChevronLeftIcon width={16} height={16} color={theme.text} />
+                <ThemedText style={{ color: theme.text }}>Todos los cursos</ThemedText>
+              </Pressable>
 
-              <RoomSummary salon={selectedSalon} bloques={salonHorarios.length} />
+              <CursoSummary curso={selectedCurso} bloques={stats.bloques} />
+
+              <View style={styles.statsGrid}>
+                <StatCard label="Bloques" value={String(stats.bloques)} />
+                <StatCard label="Asignaturas" value={String(stats.asignaturas)} />
+                <StatCard label="Docentes" value={String(stats.docentes)} />
+                <StatCard label="Dias" value={String(stats.dias)} />
+              </View>
 
               <WeeklyScheduleTable
                 canManage={canManage}
                 rows={scheduleRows}
                 onCreate={(dia, slot) =>
                   openCreate({
-                    salonId: selectedSalonId,
+                    cursoId: selectedCursoId,
+                    salonId: salonIdForCurso(selectedCurso.nombre),
                     diaSemana: dia,
                     horaInicio: slot.start,
                     horaFin: slot.end,
@@ -434,23 +457,69 @@ export default function HorariosScreen() {
   );
 }
 
-function RoomSummary({ salon, bloques }: { salon: SalonCatalog | null; bloques: number }) {
+function CursoList({
+  cursos,
+  bloquesPorCurso,
+  onSelect,
+}: {
+  cursos: CursoCatalog[];
+  bloquesPorCurso: Map<number, number>;
+  onSelect: (curso: CursoCatalog) => void;
+}) {
+  const theme = useTheme();
+
+  if (cursos.length === 0) {
+    return (
+      <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+        <ThemedText style={{ color: theme.textSecondary }}>No hay cursos disponibles.</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <View style={styles.cursoGrid}>
+      {cursos.map((curso) => {
+        const bloques = bloquesPorCurso.get(curso.id) ?? 0;
+        return (
+          <Pressable
+            key={curso.id}
+            onPress={() => onSelect(curso)}
+            style={[styles.cursoCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+            <View style={[styles.cursoIcon, { backgroundColor: `${theme.primary}18` }]}>
+              <AcademicCapIcon width={20} height={20} color={theme.primary} />
+            </View>
+            <View style={styles.cursoBody}>
+              <ThemedText style={[styles.cursoName, { color: theme.text }]}>{curso.nombre}</ThemedText>
+              <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+                {curso.nivel ?? 'Curso'}
+              </ThemedText>
+              <ThemedText type="small" style={{ color: theme.primary }}>
+                {bloques} bloque{bloques === 1 ? '' : 's'}
+              </ThemedText>
+            </View>
+            <ChevronRightIcon width={18} height={18} color={theme.textSecondary} />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function CursoSummary({ curso, bloques }: { curso: CursoCatalog; bloques: number }) {
   const theme = useTheme();
 
   return (
     <View style={[styles.roomSummary, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}20` }]}>
-        <MapPinIcon width={18} height={18} color={theme.primary} />
+        <AcademicCapIcon width={18} height={18} color={theme.primary} />
       </View>
       <View style={styles.roomCopy}>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          Salon seleccionado
+          Curso seleccionado
         </ThemedText>
-        <ThemedText style={[styles.roomName, { color: theme.text }]}>
-          {salon?.nombre ?? 'Sin salon'}
-        </ThemedText>
+        <ThemedText style={[styles.roomName, { color: theme.text }]}>{curso.nombre}</ThemedText>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          {salon?.ubicacion ?? 'Sin ubicacion'} - {bloques} bloque{bloques === 1 ? '' : 's'}
+          {curso.nivel ?? 'Sin nivel'} - {bloques} bloque{bloques === 1 ? '' : 's'}
         </ThemedText>
       </View>
     </View>
@@ -477,7 +546,7 @@ function WeeklyScheduleTable({
     return (
       <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
         <ThemedText style={{ color: theme.textSecondary }}>
-          No hay bloques registrados para este salon.
+          No hay bloques registrados para este curso.
         </ThemedText>
       </ThemedView>
     );
@@ -569,7 +638,7 @@ function ScheduleCell({
             {getProfesorNombre(horario)}
           </ThemedText>
           <ThemedText type="small" style={[styles.courseText, { color: theme.primary }]} numberOfLines={1}>
-            {horario.curso_nombre}
+            {horario.salon_nombre}
           </ThemedText>
         </View>
       ) : (
@@ -609,6 +678,20 @@ function getProfesorNombre(item: Horario) {
   return `${item.profesor_nombres} ${item.profesor_apellidos}`.trim();
 }
 
+// Ordena cursos del tipo "1A", "2B", "10C" por grado numerico y luego seccion.
+function compareCurso(a: string, b: string) {
+  const parse = (nombre: string) => {
+    const match = /^(\d+)\s*([A-Za-z]*)/.exec(nombre.trim());
+    return {
+      grado: match ? Number(match[1]) : Number.MAX_SAFE_INTEGER,
+      seccion: match ? match[2].toUpperCase() : nombre.toUpperCase(),
+    };
+  };
+  const pa = parse(a);
+  const pb = parse(b);
+  return pa.grado - pb.grado || pa.seccion.localeCompare(pb.seccion);
+}
+
 const styles = StyleSheet.create({
   shellContent: { gap: Spacing.three },
   hero: {
@@ -645,6 +728,28 @@ const styles = StyleSheet.create({
   heroTitle: {},
   heroSubtitle: { lineHeight: 22 },
   page: { gap: Spacing.three, paddingBottom: Spacing.five },
+  cursoGrid: { gap: Spacing.two },
+  cursoCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: Spacing.three,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  cursoIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  cursoBody: { flex: 1, minWidth: 0, gap: 2 },
+  cursoName: { fontSize: 18, fontWeight: '800' },
+  backButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: Spacing.two,
+  },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   statCard: { flex: 1, minWidth: 130, borderRadius: 20, borderWidth: 1, padding: Spacing.three },
   statValue: { fontSize: 28, fontWeight: '700', marginTop: 6 },
