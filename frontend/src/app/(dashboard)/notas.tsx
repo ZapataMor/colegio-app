@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
 import PlusIcon from 'react-native-heroicons/outline/PlusIcon';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
@@ -97,6 +97,12 @@ export default function NotasScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingNota, setEditingNota] = useState<NotaFila & { estudianteId: number } | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
 
   // ── Carga de datos ──────────────────────────────────────────────────────────
 
@@ -206,23 +212,19 @@ export default function NotasScreen() {
   };
 
   const deleteNota = (nota: NotaFila, estudianteNombre: string) => {
-    const remove = async () => {
-      try {
-        await apiFetch(`/api/notas/${nota.notaId}`, { method: 'DELETE' });
-        await load();
-      } catch (err) {
-        Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-      }
-    };
-    const msg = `Eliminar nota de ${estudianteNombre} en ${nota.asignatura}?`;
-    if (Platform.OS === 'web') {
-      if (window.confirm(msg)) remove();
-      return;
-    }
-    Alert.alert('Eliminar nota', msg, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: remove },
-    ]);
+    setConfirmState({
+      title: 'Eliminar nota',
+      message: `Eliminar nota de ${estudianteNombre} en ${nota.asignatura}?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/notas/${nota.notaId}`, { method: 'DELETE' });
+          await load();
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
+        }
+      },
+    });
   };
 
   const onEstudianteChange = (estudianteId: string) => {
@@ -344,6 +346,19 @@ export default function NotasScreen() {
         onSave={save}
         onClose={() => setModalVisible(false)}
       />
+      {confirmState && (
+        <ConfirmModal
+          visible={true}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(null);
+          }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </ScreenShell>
   );
 }

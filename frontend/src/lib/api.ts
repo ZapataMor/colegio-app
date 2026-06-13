@@ -34,6 +34,16 @@ export type ApiResponse<T> = {
   data?: T;
 };
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<ApiResponse<T>> {
   const session = getUserSession();
   const headers: Record<string, string> = {
@@ -59,7 +69,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || 'Error en la solicitud.');
+    throw new ApiError(data.message || 'Error en la solicitud.', response.status);
   }
 
   return data as ApiResponse<T>;

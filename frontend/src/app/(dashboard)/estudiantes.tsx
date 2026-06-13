@@ -17,6 +17,7 @@ import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -57,6 +58,12 @@ export default function EstudiantesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const [editing, setEditing] = useState<Estudiante | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
@@ -155,25 +162,19 @@ export default function EstudiantesScreen() {
   };
 
   const handleDelete = (est: Estudiante) => {
-    Alert.alert(
-      'Eliminar estudiante',
-      `¿Eliminar a ${est.nombres} ${est.apellidos}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiFetch(`/api/estudiantes/${est.id}`, { method: 'DELETE' });
-              await loadData();
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmState({
+      title: 'Eliminar estudiante',
+      message: `¿Eliminar a ${est.nombres} ${est.apellidos}?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/estudiantes/${est.id}`, { method: 'DELETE' });
+          await loadData();
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
+        }
+      },
+    });
   };
 
   const decoratedStudents = useMemo(
@@ -503,6 +504,19 @@ export default function EstudiantesScreen() {
             </ThemedView>
           </View>
         </Modal>
+        {confirmState && (
+          <ConfirmModal
+            visible={true}
+            title={confirmState.title}
+            message={confirmState.message}
+            confirmText={confirmState.confirmText}
+            onConfirm={async () => {
+              await confirmState.onConfirm();
+              setConfirmState(null);
+            }}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
       </View>
     </ScreenShell>
   );

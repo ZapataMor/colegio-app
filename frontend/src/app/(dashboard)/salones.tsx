@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import BuildingOffice2Icon from 'react-native-heroicons/outline/BuildingOffice2Icon';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import MagnifyingGlassIcon from 'react-native-heroicons/outline/MagnifyingGlassIcon';
 import MapPinIcon from 'react-native-heroicons/outline/MapPinIcon';
 import PencilSquareIcon from 'react-native-heroicons/outline/PencilSquareIcon';
@@ -70,6 +70,12 @@ export default function SalonesScreen() {
     capacidad: '40',
     estado: 'activo' as SalonEstado,
   });
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
 
   const loadSalones = async () => {
     try {
@@ -174,31 +180,19 @@ export default function SalonesScreen() {
   };
 
   const deleteSalon = (salon: Salon) => {
-    const remove = async () => {
-      try {
-        await apiFetch(`/api/salones/${salon.id}`, { method: 'DELETE' });
-        setSalonesData((current) => current.filter((item) => item.id !== salon.id));
-      } catch (err) {
-        Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar el salon.');
-      }
-    };
-
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm(`Deseas eliminar ${salon.nombre}?`);
-      if (confirmed) {
-        remove();
-      }
-      return;
-    }
-
-    Alert.alert('Eliminar salon', `Deseas eliminar ${salon.nombre}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: remove,
+    setConfirmState({
+      title: 'Eliminar salon',
+      message: `¿Deseas eliminar ${salon.nombre}?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/salones/${salon.id}`, { method: 'DELETE' });
+          setSalonesData((current) => current.filter((item) => item.id !== salon.id));
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar el salon.');
+        }
       },
-    ]);
+    });
   };
 
   return (
@@ -363,6 +357,19 @@ export default function SalonesScreen() {
           </ThemedView>
         </View>
       </Modal>
+      {confirmState && (
+        <ConfirmModal
+          visible={true}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(null);
+          }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </ScreenShell>
   );
 }

@@ -21,6 +21,7 @@ import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 import UserIcon from 'react-native-heroicons/outline/UserIcon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -69,6 +70,12 @@ export default function MatriculaScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -153,18 +160,16 @@ export default function MatriculaScreen() {
   };
 
   const handleDelete = (matricula: Matricula) => {
-    Alert.alert('Retirar matricula', `Retirar a ${matricula.estudiante_nombres} ${matricula.estudiante_apellidos}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Retirar',
-        style: 'destructive',
-        onPress: async () => {
-          await apiFetch(`/api/matriculas/${matricula.id}`, { method: 'DELETE' });
-          setSelected(null);
-          await loadData();
-        },
+    setConfirmState({
+      title: 'Retirar matricula',
+      message: `Retirar a ${matricula.estudiante_nombres} ${matricula.estudiante_apellidos}?`,
+      confirmText: 'Retirar',
+      onConfirm: async () => {
+        await apiFetch(`/api/matriculas/${matricula.id}`, { method: 'DELETE' });
+        setSelected(null);
+        await loadData();
       },
-    ]);
+    });
   };
 
   return (
@@ -254,6 +259,19 @@ export default function MatriculaScreen() {
             <ThemedText style={styles.newButtonText}>Nueva matricula</ThemedText>
           </Pressable>
         </ScrollView>
+      )}
+      {confirmState && (
+        <ConfirmModal
+          visible={true}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(null);
+          }}
+          onCancel={() => setConfirmState(null)}
+        />
       )}
     </ScreenShell>
   );

@@ -22,6 +22,7 @@ import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
 import { SearchBar } from '@/components/crud/SearchBar';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -147,6 +148,12 @@ export default function UsuariosScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const [editing, setEditing] = useState<Usuario | null>(null);
   const [createForm, setCreateForm] = useState(emptyCreate);
   const [editForm, setEditForm] = useState(emptyEdit);
@@ -313,25 +320,19 @@ export default function UsuariosScreen() {
   };
 
   const handleDelete = (usuario: Usuario) => {
-    Alert.alert(
-      'Eliminar acceso',
-      `¿Quitar el acceso de ${usuario.nombres} ${usuario.apellidos}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiFetch(`/api/usuarios/${usuario.id}`, { method: 'DELETE' });
-              await loadUsuarios();
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmState({
+      title: 'Eliminar acceso',
+      message: `¿Quitar el acceso de ${usuario.nombres} ${usuario.apellidos}?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/usuarios/${usuario.id}`, { method: 'DELETE' });
+          await loadUsuarios();
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
+        }
+      },
+    });
   };
 
   const renderUserCard = ({ item }: { item: Usuario }) => {
@@ -647,6 +648,19 @@ export default function UsuariosScreen() {
             </ThemedView>
           </View>
         </Modal>
+        {confirmState && (
+          <ConfirmModal
+            visible={true}
+            title={confirmState.title}
+            message={confirmState.message}
+            confirmText={confirmState.confirmText}
+            onConfirm={async () => {
+              await confirmState.onConfirm();
+              setConfirmState(null);
+            }}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
       </SafeAreaView>
     </ThemedView>
   );

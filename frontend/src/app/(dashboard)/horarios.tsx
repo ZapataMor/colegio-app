@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,6 +20,7 @@ import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -74,6 +76,7 @@ const DIAS = [
   { value: 'miercoles', label: 'Miercoles' },
   { value: 'jueves', label: 'Jueves' },
   { value: 'viernes', label: 'Viernes' },
+  { value: 'sabado', label: 'Sábado' },
 ];
 
 const COL = {
@@ -81,15 +84,34 @@ const COL = {
   dia: 154,
 };
 
-const emptyForm = {
+type HorarioDay = {
+  dia: string;
+  horaInicio: string;
+  horaFin: string;
+};
+
+type HorarioForm = {
+  cursoId: string;
+  profesorId: string;
+  asignaturaId: string;
+  salonId: string;
+  dias: HorarioDay[];
+  estado: string;
+};
+
+const emptyForm: HorarioForm = {
   cursoId: '',
   profesorId: '',
   asignaturaId: '',
   salonId: '',
-  diaSemana: 'lunes',
-  horaInicio: '07:00:00',
-  horaFin: '08:00:00',
+  dias: [{ dia: 'lunes', horaInicio: '07:00:00', horaFin: '08:00:00' }],
   estado: 'activo',
+};
+
+const institution = {
+  name: 'Institucion Educativa #2 Inmaculada',
+  appName: 'Colegio App',
+  location: 'Colombia',
 };
 
 export default function HorariosScreen() {
@@ -104,8 +126,16 @@ export default function HorariosScreen() {
   const [error, setError] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<Horario | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<HorarioForm>(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [printing, setPrinting] = useState(false);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -219,14 +249,16 @@ export default function HorariosScreen() {
     [catalog.salones]
   );
 
-  const openCreate = (overrides: Partial<typeof emptyForm> = {}) => {
+  const openCreate = (overrides: Partial<HorarioForm> = {}) => {
     setEditing(null);
+    setSaveError('');
     setForm({
       ...emptyForm,
       cursoId: selectedCursoId || String(visibleCursos[0]?.id ?? catalog.cursos[0]?.id ?? ''),
       profesorId: String(catalog.profesores[0]?.id ?? ''),
       asignaturaId: String(catalog.asignaturas[0]?.id ?? ''),
       salonId: salonIdForCurso(selectedCurso?.nombre),
+      dias: overrides.dias ?? [{ dia: 'lunes', horaInicio: '07:00:00', horaFin: '08:00:00' }],
       ...overrides,
     });
     setModalVisible(true);
@@ -234,69 +266,206 @@ export default function HorariosScreen() {
 
   const openEdit = (item: Horario) => {
     setEditing(item);
+    setSaveError('');
     setForm({
       cursoId: String(item.curso_id),
       profesorId: String(item.profesor_id),
       asignaturaId: String(item.asignatura_id),
       salonId: String(item.salon_id),
-      diaSemana: item.dia_semana,
-      horaInicio: item.hora_inicio,
-      horaFin: item.hora_fin,
+      dias: [{ dia: item.dia_semana, horaInicio: item.hora_inicio, horaFin: item.hora_fin }],
       estado: item.estado,
     });
     setModalVisible(true);
   };
 
   const handleSave = async () => {
+    setSaveError('');
+
     if (!form.cursoId || !form.profesorId || !form.asignaturaId || !form.salonId) {
-      Alert.alert('Validacion', 'Completa curso, docente, asignatura y salon.');
+      const message = 'Completa curso, docente, asignatura y salon.';
+      setSaveError(message);
+      Alert.alert('Validacion', message);
       return;
+    }
+
+    if (form.dias.length === 0) {
+      const message = 'Selecciona al menos un dia.';
+      setSaveError(message);
+      Alert.alert('Validacion', message);
+      return;
+    }
+
+    for (const item of form.dias) {
+      if (!item.horaInicio || !item.horaFin) {
+        const message = 'Completa hora inicio y fin para cada día.';
+        setSaveError(message);
+        Alert.alert('Validacion', message);
+        return;
+      }
+      const inicio = normalizeTime(item.horaInicio);
+      const fin = normalizeTime(item.horaFin);
+      if (fin <= inicio) {
+        const message = `La hora final debe ser mayor que la inicial en ${item.dia}.`;
+        setSaveError(message);
+        Alert.alert('Validacion', message);
+        return;
+      }
+      if (inicio < '06:00:00' || fin > '22:00:00') {
+        const message = 'No se puede registrar un horario fuera del horario institucional (6:00am - 10:00pm).';
+        setSaveError(message);
+        Alert.alert('Validacion', message);
+        return;
+      }
     }
 
     setSaving(true);
     try {
-      const body = {
+      const bodyBase = {
         cursoId: Number(form.cursoId),
         profesorId: Number(form.profesorId),
         asignaturaId: Number(form.asignaturaId),
         salonId: Number(form.salonId),
-        diaSemana: form.diaSemana,
-        horaInicio: normalizeTime(form.horaInicio),
-        horaFin: normalizeTime(form.horaFin),
         estado: form.estado,
       };
 
       if (editing) {
-        await apiFetch(`/api/horarios/${editing.id}`, { method: 'PUT', body });
+        const item = form.dias[0];
+        await apiFetch(`/api/horarios/${editing.id}`, {
+          method: 'PUT',
+          body: {
+            ...bodyBase,
+            diaSemana: item.dia,
+            horaInicio: normalizeTime(item.horaInicio),
+            horaFin: normalizeTime(item.horaFin),
+          },
+        });
       } else {
-        await apiFetch('/api/horarios', { method: 'POST', body });
+        for (const item of form.dias.slice(0, 5)) {
+          await apiFetch('/api/horarios', {
+            method: 'POST',
+            body: {
+              ...bodyBase,
+              diaSemana: item.dia,
+              horaInicio: normalizeTime(item.horaInicio),
+              horaFin: normalizeTime(item.horaFin),
+            },
+          });
+        }
       }
-      setSelectedCursoId(String(body.cursoId));
+      setSelectedCursoId(String(bodyBase.cursoId));
       setModalVisible(false);
       await loadData();
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar el horario.');
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+          ? err
+          : JSON.stringify(err, null, 2);
+      const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
+      const mappedMessage = (() => {
+        if (/profesor ya tiene clase/i.test(errorMessage)) {
+          return 'El profesor ya tiene clase a esa hora en otro grupo.';
+        }
+        if (/sal[oó]n ya est[aá] ocupado/i.test(errorMessage)) {
+          return 'El salón ya está ocupado a esa hora.';
+        }
+        if (/grupo ya tiene clase/i.test(errorMessage)) {
+          return 'El grupo ya tiene clase a esa hora.';
+        }
+        if (/ya existe un horario exactamente igual/i.test(errorMessage)) {
+          return 'Ya existe un horario exactamente igual (mismo día, hora, profesor, salón y grupo).';
+        }
+        if (/mismo profesor a la misma materia dos veces/i.test(errorMessage)) {
+          return 'No se puede asignar el mismo profesor a la misma materia dos veces en el mismo grupo.';
+        }
+        if (/misma materia ya tiene horario registrado/i.test(errorMessage)) {
+          return 'La misma materia ya tiene horario registrado en ese día para ese grupo.';
+        }
+        if (/horario fuera del horario institucional/i.test(errorMessage)) {
+          return 'No se puede registrar un horario fuera del horario institucional (6:00am - 10:00pm).';
+        }
+        if (/conflicto/i.test(errorMessage) || status === 409) {
+          return 'No se puede guardar, el horario se cruza con otra materia.';
+        }
+        return errorMessage || 'No se pudo guardar el horario.';
+      })();
+      setSaveError(mappedMessage);
+      Alert.alert('Error', mappedMessage);
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = (item: Horario) => {
-    Alert.alert('Eliminar bloque', `Eliminar ${item.asignatura_nombre} de ${item.curso_nombre}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await apiFetch(`/api/horarios/${item.id}`, { method: 'DELETE' });
-            await loadData();
-          } catch (err) {
-            Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-          }
-        },
+    setConfirmState({
+      title: 'Eliminar bloque',
+      message: `Eliminar ${item.asignatura_nombre} de ${item.curso_nombre}?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/horarios/${item.id}`, { method: 'DELETE' });
+          await loadData();
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
+        }
       },
-    ]);
+    });
+  };
+
+  const printHorario = () => {
+    if (!selectedCurso) {
+      Alert.alert('Horario no disponible', 'Selecciona un curso para imprimir su horario.');
+      return;
+    }
+
+    if (cursoHorarios.length === 0) {
+      Alert.alert('Horario vacío', 'No hay bloques registrados para este curso.');
+      return;
+    }
+
+    if (Platform.OS !== 'web') {
+      Alert.alert(
+        'Impresión disponible en web',
+        'Abre este módulo en un navegador para imprimir o exportar el horario en PDF.'
+      );
+      return;
+    }
+
+    setPrinting(true);
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow?.document;
+      if (!doc) {
+        iframe.remove();
+        Alert.alert('Error', 'No se pudo abrir el visor de impresión.');
+        return;
+      }
+
+      doc.open();
+      doc.write(buildHorarioHtml(selectedCurso.nombre, cursoHorarios));
+      doc.close();
+
+      const printFrame = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        window.setTimeout(() => iframe.remove(), 800);
+      };
+
+      window.setTimeout(printFrame, 250);
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo imprimir el horario.');
+    } finally {
+      setPrinting(false);
+    }
   };
 
   const heroSubtitle = selectedCurso
@@ -374,6 +543,24 @@ export default function HorariosScreen() {
               </Pressable>
 
               <CursoSummary curso={selectedCurso} bloques={stats.bloques} />
+              <View style={styles.printRow}>
+                <Pressable
+                  disabled={printing || cursoHorarios.length === 0}
+                  onPress={printHorario}
+                  style={[
+                    styles.printButton,
+                    {
+                      backgroundColor: theme.primary,
+                      opacity: printing || cursoHorarios.length === 0 ? 0.6 : 1,
+                    },
+                  ]}>
+                  {printing ? (
+                    <ActivityIndicator color={theme.primaryText} />
+                  ) : (
+                    <ThemedText style={{ color: theme.primaryText }}>Imprimir horario</ThemedText>
+                  )}
+                </Pressable>
+              </View>
 
               <View style={styles.statsGrid}>
                 <StatCard label="Bloques" value={String(stats.bloques)} />
@@ -389,9 +576,7 @@ export default function HorariosScreen() {
                   openCreate({
                     cursoId: selectedCursoId,
                     salonId: salonIdForCurso(selectedCurso.nombre),
-                    diaSemana: dia,
-                    horaInicio: slot.start,
-                    horaFin: slot.end,
+                    dias: [{ dia, horaInicio: slot.start, horaFin: slot.end }],
                   })
                 }
                 onDelete={handleDelete}
@@ -408,6 +593,13 @@ export default function HorariosScreen() {
             <ThemedText type="title" style={[styles.modalTitle, { color: theme.text }]}>
               {editing ? 'Editar bloque' : 'Nuevo bloque'}
             </ThemedText>
+            {saveError ? (
+              <ThemedView type="backgroundElement" style={[styles.saveErrorBox, { borderColor: theme.danger }]}> 
+                <ThemedText style={[styles.saveErrorText, { color: theme.danger }]}>
+                  {saveError}
+                </ThemedText>
+              </ThemedView>
+            ) : null}
             <ScrollView contentContainerStyle={styles.form}>
               <OptionChips
                 label="Curso"
@@ -433,14 +625,51 @@ export default function HorariosScreen() {
                 value={form.salonId}
                 onChange={(salonId) => setForm((prev) => ({ ...prev, salonId }))}
               />
-              <OptionChips
-                label="Dia"
-                options={DIAS.map((dia) => ({ value: dia.value, label: dia.label }))}
-                value={form.diaSemana}
-                onChange={(diaSemana) => setForm((prev) => ({ ...prev, diaSemana }))}
+              <DaySelect
+                label="Dias"
+                options={DIAS}
+                selected={form.dias.map((item) => item.dia)}
+                maxSelection={editing ? 1 : 5}
+                onChange={(dias) =>
+                  setForm((prev) => {
+                    const existing = prev.dias;
+                    const nextDias = dias.map((dia) => {
+                      const existingDay = existing.find((item) => item.dia === dia);
+                      return (
+                        existingDay ?? { dia, horaInicio: existing[0]?.horaInicio ?? '07:00:00', horaFin: existing[0]?.horaFin ?? '08:00:00' }
+                      );
+                    });
+                    return { ...prev, dias: nextDias };
+                  })
+                }
               />
-              <FormField label="Hora inicio" value={form.horaInicio} onChangeText={(horaInicio) => setForm((prev) => ({ ...prev, horaInicio }))} placeholder="07:00" />
-              <FormField label="Hora fin" value={form.horaFin} onChangeText={(horaFin) => setForm((prev) => ({ ...prev, horaFin }))} placeholder="08:00" />
+              {form.dias.map((item) => (
+                <ThemedView key={item.dia} type="backgroundElement" style={[styles.dayTimeCard, { borderColor: theme.border }]}>
+                  <ThemedText style={[styles.dayTimeLabel, { color: theme.text }]}>{item.dia.toUpperCase()}</ThemedText>
+                  <FormField
+                    label="Hora inicio"
+                    value={item.horaInicio}
+                    onChangeText={(value) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        dias: prev.dias.map((d) => (d.dia === item.dia ? { ...d, horaInicio: value } : d)),
+                      }))
+                    }
+                    placeholder="07:00"
+                  />
+                  <FormField
+                    label="Hora fin"
+                    value={item.horaFin}
+                    onChangeText={(value) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        dias: prev.dias.map((d) => (d.dia === item.dia ? { ...d, horaFin: value } : d)),
+                      }))
+                    }
+                    placeholder="08:00"
+                  />
+                </ThemedView>
+              ))}
             </ScrollView>
             <View style={styles.modalActions}>
               <Pressable onPress={() => setModalVisible(false)} style={[styles.secondaryButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
@@ -453,6 +682,19 @@ export default function HorariosScreen() {
           </ThemedView>
         </View>
       </Modal>
+      {confirmState && (
+        <ConfirmModal
+          visible={true}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(null);
+          }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </ScreenShell>
   );
 }
@@ -670,12 +912,354 @@ function normalizeTime(value: string) {
   return value;
 }
 
+function DaySelect({
+  label,
+  options,
+  selected,
+  maxSelection,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  selected: string[];
+  maxSelection: number;
+  onChange: (selected: string[]) => void;
+}) {
+  const theme = useTheme();
+
+  const toggleDay = (value: string) => {
+    const isSelected = selected.includes(value);
+    if (isSelected) {
+      onChange(selected.filter((item) => item !== value));
+      return;
+    }
+
+    if (selected.length >= maxSelection) {
+      Alert.alert('Límite alcanzado', `Solo puedes seleccionar hasta ${maxSelection} días.`);
+      return;
+    }
+
+    onChange([...selected, value]);
+  };
+
+  return (
+    <View style={styles.daySelectContainer}>
+      <ThemedText type="small" style={[styles.label, { color: theme.textSecondary }]}>
+        {label}
+      </ThemedText>
+      <ThemedText type="small" style={[styles.dayHint, { color: theme.textSecondary }]}>Selecciona entre 1 y {maxSelection} días.</ThemedText>
+      <View style={styles.dayRow}>
+        {options.map((option) => {
+          const active = selected.includes(option.value);
+          return (
+            <Pressable
+              key={option.value}
+              onPress={() => toggleDay(option.value)}
+              style={[
+                styles.dayChip,
+                {
+                  backgroundColor: active ? theme.primary : theme.surfaceMuted,
+                  borderColor: active ? theme.primary : theme.border,
+                },
+              ]}>
+              <ThemedText style={[styles.dayChipText, { color: active ? theme.primaryText : theme.textSecondary }]}>
+                {option.label}
+              </ThemedText>
+            </Pressable>
+          );
+        })}
+      </View>
+      <ThemedText type="small" style={[styles.dayHint, { color: theme.textSecondary }]}>Selecciona entre 1 y {maxSelection} días.</ThemedText>
+    </View>
+  );
+}
+
 function sliceTime(value: string) {
   return value.slice(0, 5);
 }
 
 function getProfesorNombre(item: Horario) {
   return `${item.profesor_nombres} ${item.profesor_apellidos}`.trim();
+}
+
+function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
+  const days = DIAS;
+  const palette = ['#dbeafe', '#fef3c7', '#fde2e3', '#dcfce7', '#ede9fe', '#ffe4d6', '#d8f5ff', '#f5f3ff'];
+  const subjectColor = new Map<string, string>();
+  const getSubjectColor = (subject: string) => {
+    if (!subjectColor.has(subject)) {
+      subjectColor.set(subject, palette[subjectColor.size % palette.length]);
+    }
+    return subjectColor.get(subject)!;
+  };
+
+  const times = Array.from({ length: 13 }, (_, index) => {
+    const startHour = 7 + index;
+    const endHour = startHour + 1;
+    return {
+      start: `${String(startHour).padStart(2, '0')}:00:00`,
+      end: `${String(endHour).padStart(2, '0')}:00:00`,
+      label: `${String(startHour).padStart(2, '0')}:00 - ${String(endHour).padStart(2, '0')}:00`,
+    };
+  });
+
+  const scheduleRows = times
+    .map((slot) => {
+      const cells = days
+        .map((dia) => {
+          const items = horarios.filter(
+            (item) =>
+              item.dia_semana === dia.value &&
+              normalizeTime(item.hora_inicio) < slot.end &&
+              normalizeTime(item.hora_fin) > slot.start
+          );
+          const cellHtml = items
+            .map((item) => {
+              const color = getSubjectColor(item.asignatura_nombre);
+              return `
+                <div class="cell-block" style="background: ${color}; border-color: ${color};">
+                  <strong>${escapeHtml(item.asignatura_nombre)}</strong>
+                  <span>${escapeHtml(getProfesorNombre(item))}</span>
+                  <span>${escapeHtml(item.salon_nombre)}</span>
+                </div>
+              `;
+            })
+            .join('');
+          return cellHtml ? `<td>${cellHtml}</td>` : '<td class="empty-cell"></td>';
+        })
+        .join('');
+      return `
+        <tr>
+          <td>${escapeHtml(slot.label)}</td>
+          ${cells}
+        </tr>
+      `;
+    })
+    .join('');
+
+  const uniqueSubjects = Array.from(
+    new Map(
+      horarios.map((item) => [
+        item.asignatura_nombre,
+        item,
+      ])
+    ).values()
+  );
+
+  const detailRows = uniqueSubjects
+    .map((item) => {
+      const color = getSubjectColor(item.asignatura_nombre);
+      return `
+        <tr>
+          <td><span class="subject-pill" style="background:${color};">${escapeHtml(item.asignatura_nombre)}</span></td>
+          <td>${escapeHtml(getProfesorNombre(item))}</td>
+          <td>${escapeHtml(item.salon_nombre)}</td>
+        </tr>
+      `;
+    })
+    .join('');
+
+  return `<!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Horario - ${escapeHtml(cursoNombre)}</title>
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            background: #f3f5f7;
+            color: #111827;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+          }
+          .page {
+            width: 210mm;
+            min-height: 297mm;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 16mm;
+          }
+          .institution {
+            text-align: center;
+            margin-bottom: 12px;
+          }
+          .institution h1 {
+            margin: 0 0 2px;
+            font-size: 18px;
+            letter-spacing: 0;
+            text-transform: uppercase;
+          }
+          .institution p {
+            margin: 2px 0;
+            color: #475569;
+            font-size: 11px;
+          }
+          .section-title {
+            margin: 14px 0 6px;
+            color: #0f766e;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
+          .info-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+          }
+          .info-item {
+            background: #f8fafc;
+            border: 1px solid #dbeafe;
+            border-radius: 8px;
+            padding: 8px 10px;
+          }
+          .info-label {
+            display: block;
+            color: #64748b;
+            font-size: 10px;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+          }
+          .info-value {
+            font-weight: 700;
+            font-size: 12px;
+          }
+          .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 14px;
+          }
+          .schedule-table th,
+          .schedule-table td {
+            border: 1px solid #e2e8f0;
+            padding: 6px 8px;
+            vertical-align: top;
+          }
+          .schedule-table th {
+            background: #eef2ff;
+            color: #334155;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            padding: 10px 8px;
+          }
+          .schedule-table td {
+            width: calc((100% - 85px) / 6);
+            min-width: 80px;
+            padding: 4px 6px;
+            vertical-align: top;
+            height: 64px;
+          }
+          .cell-block {
+            border: 1px solid transparent;
+            border-radius: 10px;
+            padding: 6px 8px;
+            margin-bottom: 4px;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.05);
+          }
+          .cell-block strong {
+            display: block;
+            margin-bottom: 3px;
+            font-size: 11px;
+          }
+          .cell-block span {
+            display: block;
+            color: #334155;
+            font-size: 10px;
+            line-height: 1.3;
+          }
+          .empty-cell {
+            min-height: 44px;
+            background: #ffffff;
+          }
+          .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          .detail-table th,
+          .detail-table td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 11px;
+          }
+          .detail-table th {
+            background: #eef2ff;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+          }
+          .subject-pill {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            color: #0f172a;
+          }
+          @media print {
+            body { background: #ffffff; }
+            .page { width: auto; min-height: auto; margin: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="page">
+          <section class="institution">
+            <h1>${escapeHtml(institution.name)}</h1>
+            <p>${escapeHtml(institution.appName)} - ${escapeHtml(institution.location)}</p>
+            <p>Horario semanal - ${escapeHtml(cursoNombre)}</p>
+          </section>
+
+          <section>
+            <div class="info-grid">
+              <div class="info-item"><span class="info-label">Curso</span><span class="info-value">${escapeHtml(cursoNombre)}</span></div>
+              <div class="info-item"><span class="info-label">Registros</span><span class="info-value">${horarios.length}</span></div>
+              <div class="info-item"><span class="info-label">Fecha</span><span class="info-value">${escapeHtml(new Date().toLocaleDateString())}</span></div>
+            </div>
+          </section>
+
+          <section>
+            <h2 class="section-title">Horario semanal</h2>
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th style="width: 85px;">Hora</th>
+                  ${days.map((dia) => `<th>${escapeHtml(dia.label)}</th>`).join('')}
+                </tr>
+              </thead>
+              <tbody>
+                ${scheduleRows || '<tr><td colspan="6" class="empty-cell">No hay bloques registrados.</td></tr>'}
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h2 class="section-title">Detalle de materias</h2>
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>Materia</th>
+                  <th>Docente</th>
+                  <th>Salón</th>
+                </tr>
+              </thead>
+              <tbody>${detailRows}</tbody>
+            </table>
+          </section>
+        </main>
+      </body>
+    </html>`;
+}
+
+function escapeHtml(value: string | number | null | undefined) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // Ordena cursos del tipo "1A", "2B", "10C" por grado numerico y luego seccion.
@@ -694,6 +1278,19 @@ function compareCurso(a: string, b: string) {
 
 const styles = StyleSheet.create({
   shellContent: { gap: Spacing.three },
+  daySelectContainer: { gap: Spacing.two },
+  dayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.one },
+  dayChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  dayChipText: { fontSize: 13, fontWeight: '700' },
+  dayHint: { fontSize: 12, opacity: 0.8 },
+  dayTimeCard: { borderWidth: 1, borderRadius: 18, padding: Spacing.three, gap: Spacing.two },
+  dayTimeLabel: { fontWeight: '700' },
+  label: { fontWeight: '700', opacity: 0.85 },
   hero: {
     position: 'relative',
     overflow: 'hidden',
@@ -749,6 +1346,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingVertical: 8,
     paddingHorizontal: Spacing.two,
+  },
+  printRow: { alignItems: 'flex-start', marginBottom: Spacing.two },
+  printButton: {
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.four,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   statCard: { flex: 1, minWidth: 130, borderRadius: 20, borderWidth: 1, padding: Spacing.three },
@@ -823,6 +1429,8 @@ const styles = StyleSheet.create({
     padding: Spacing.four,
   },
   modalTitle: { marginBottom: Spacing.three },
+  saveErrorBox: { borderWidth: 1, borderRadius: 16, padding: Spacing.three, marginBottom: Spacing.two },
+  saveErrorText: { fontSize: 13, lineHeight: 18 },
   form: { gap: Spacing.three, paddingBottom: Spacing.three },
   modalActions: { flexDirection: 'row', gap: Spacing.two },
   secondaryButton: { flex: 1, minHeight: 48, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

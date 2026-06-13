@@ -62,6 +62,95 @@ const createHorario = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: "La hora final debe ser mayor que la inicial." });
     }
 
+    if (horaInicio < "06:00:00" || horaFin > "22:00:00") {
+      return res.status(400).json({
+        ok: false,
+        message: "No se puede registrar un horario fuera del horario institucional (6:00am - 10:00pm).",
+      });
+    }
+
+    const exactMatch = await horarioModel.findExactHorario({
+      cursoId,
+      profesorId,
+      asignaturaId,
+      salonId,
+      diaSemana,
+      horaInicio,
+      horaFin,
+    });
+
+    if (exactMatch) {
+      return res.status(409).json({
+        ok: false,
+        message: "Ya existe un horario exactamente igual (mismo día, hora, profesor, salón y grupo).",
+      });
+    }
+
+    const sameSubjectDay = await horarioModel.findSameAsignaturaDay({
+      cursoId,
+      asignaturaId,
+      diaSemana,
+    });
+
+    if (sameSubjectDay) {
+      if (sameSubjectDay.profesor_id === Number(profesorId)) {
+        return res.status(409).json({
+          ok: false,
+          message: "No se puede asignar el mismo profesor a la misma materia dos veces en el mismo grupo.",
+        });
+      }
+
+      return res.status(409).json({
+        ok: false,
+        message: "La misma materia ya tiene horario registrado en ese día para ese grupo.",
+      });
+    }
+
+    const profesorOverlap = await horarioModel.findOverlapsByField({
+      field: "profesor_id",
+      value: profesorId,
+      diaSemana,
+      horaInicio,
+      horaFin,
+    });
+
+    if (profesorOverlap.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "El profesor ya tiene clase a esa hora en otro grupo.",
+      });
+    }
+
+    const salonOverlap = await horarioModel.findOverlapsByField({
+      field: "salon_id",
+      value: salonId,
+      diaSemana,
+      horaInicio,
+      horaFin,
+    });
+
+    if (salonOverlap.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "El salón ya está ocupado a esa hora.",
+      });
+    }
+
+    const cursoOverlap = await horarioModel.findOverlapsByField({
+      field: "curso_id",
+      value: cursoId,
+      diaSemana,
+      horaInicio,
+      horaFin,
+    });
+
+    if (cursoOverlap.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "El grupo ya tiene clase a esa hora.",
+      });
+    }
+
     const horarioId = await horarioModel.create({
       cursoId,
       profesorId,
@@ -118,8 +207,108 @@ const updateHorario = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: "La hora final debe ser mayor que la inicial." });
     }
 
+    if (horaInicio < "06:00:00" || horaFin > "22:00:00") {
+      return res.status(400).json({
+        ok: false,
+        message: "No se puede registrar un horario fuera del horario institucional (6:00am - 10:00pm).",
+      });
+    }
+
     if (data.diaSemana && !DIAS.includes(data.diaSemana)) {
       return res.status(400).json({ ok: false, message: "Dia de la semana invalido." });
+    }
+
+    const finalDiaSemana = data.diaSemana ?? current.dia_semana;
+    const finalCursoId = data.cursoId ?? current.curso_id;
+    const finalProfesorId = data.profesorId ?? current.profesor_id;
+    const finalAsignaturaId = data.asignaturaId ?? current.asignatura_id;
+    const finalSalonId = data.salonId ?? current.salon_id;
+
+    const exactMatch = await horarioModel.findExactHorario({
+      cursoId: finalCursoId,
+      profesorId: finalProfesorId,
+      asignaturaId: finalAsignaturaId,
+      salonId: finalSalonId,
+      diaSemana: finalDiaSemana,
+      horaInicio,
+      horaFin,
+      excludeId: id,
+    });
+
+    if (exactMatch) {
+      return res.status(409).json({
+        ok: false,
+        message: "Ya existe un horario exactamente igual (mismo día, hora, profesor, salón y grupo).",
+      });
+    }
+
+    const sameSubjectDay = await horarioModel.findSameAsignaturaDay({
+      cursoId: finalCursoId,
+      asignaturaId: finalAsignaturaId,
+      diaSemana: finalDiaSemana,
+      excludeId: id,
+    });
+
+    if (sameSubjectDay) {
+      if (sameSubjectDay.profesor_id === Number(finalProfesorId)) {
+        return res.status(409).json({
+          ok: false,
+          message: "No se puede asignar el mismo profesor a la misma materia dos veces en el mismo grupo.",
+        });
+      }
+
+      return res.status(409).json({
+        ok: false,
+        message: "La misma materia ya tiene horario registrado en ese día para ese grupo.",
+      });
+    }
+
+    const profesorOverlap = await horarioModel.findOverlapsByField({
+      field: "profesor_id",
+      value: finalProfesorId,
+      diaSemana: finalDiaSemana,
+      horaInicio,
+      horaFin,
+      excludeId: id,
+    });
+
+    if (profesorOverlap.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "El profesor ya tiene clase a esa hora en otro grupo.",
+      });
+    }
+
+    const salonOverlap = await horarioModel.findOverlapsByField({
+      field: "salon_id",
+      value: finalSalonId,
+      diaSemana: finalDiaSemana,
+      horaInicio,
+      horaFin,
+      excludeId: id,
+    });
+
+    if (salonOverlap.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "El salón ya está ocupado a esa hora.",
+      });
+    }
+
+    const cursoOverlap = await horarioModel.findOverlapsByField({
+      field: "curso_id",
+      value: finalCursoId,
+      diaSemana: finalDiaSemana,
+      horaInicio,
+      horaFin,
+      excludeId: id,
+    });
+
+    if (cursoOverlap.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "El grupo ya tiene clase a esa hora.",
+      });
     }
 
     const updated = await horarioModel.update(id, data);

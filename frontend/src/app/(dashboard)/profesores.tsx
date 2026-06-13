@@ -20,6 +20,7 @@ import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -60,6 +61,12 @@ export default function ProfesoresScreen() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const loadData = useCallback(async () => {
@@ -137,25 +144,19 @@ export default function ProfesoresScreen() {
   };
 
   const handleDelete = (prof: Profesor) => {
-    Alert.alert(
-      'Eliminar profesor',
-      `¿Eliminar a ${prof.nombres} ${prof.apellidos}?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiFetch(`/api/profesores/${prof.id}`, { method: 'DELETE' });
-              await loadData();
-            } catch (err) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-            }
-          },
-        },
-      ]
-    );
+    setConfirmState({
+      title: 'Eliminar profesor',
+      message: `¿Eliminar a ${prof.nombres} ${prof.apellidos}?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/profesores/${prof.id}`, { method: 'DELETE' });
+          await loadData();
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
+        }
+      },
+    });
   };
 
   const stats = useMemo(() => {
@@ -377,6 +378,19 @@ export default function ProfesoresScreen() {
             </ThemedView>
           </View>
         </Modal>
+        {confirmState && (
+          <ConfirmModal
+            visible={true}
+            title={confirmState.title}
+            message={confirmState.message}
+            confirmText={confirmState.confirmText}
+            onConfirm={async () => {
+              await confirmState.onConfirm();
+              setConfirmState(null);
+            }}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
       </View>
     </ScreenShell>
   );

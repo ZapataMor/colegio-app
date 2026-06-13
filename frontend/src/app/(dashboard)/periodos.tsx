@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +15,7 @@ import PlusIcon from 'react-native-heroicons/outline/PlusIcon';
 import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 
 import { ScreenShell } from '@/components/screen-shell';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
@@ -51,6 +51,12 @@ export default function PeriodosScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<Periodo | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [confirmState, setConfirmState] = useState<{
+    title: string;
+    message: string;
+    confirmText?: string;
+    onConfirm: () => Promise<void> | void;
+  } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -112,22 +118,19 @@ export default function PeriodosScreen() {
   };
 
   const deletePeriodo = (p: Periodo) => {
-    const remove = async () => {
-      try {
-        await apiFetch(`/api/periodos/${p.id}`, { method: 'DELETE' });
-        setPeriodos((prev) => prev.filter((x) => x.id !== p.id));
-      } catch (err) {
-        Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
-      }
-    };
-    if (Platform.OS === 'web') {
-      if (window.confirm(`Eliminar el periodo "${p.nombre}"?`)) remove();
-      return;
-    }
-    Alert.alert('Eliminar', `Eliminar el periodo "${p.nombre}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: remove },
-    ]);
+    setConfirmState({
+      title: 'Eliminar periodo',
+      message: `Eliminar el periodo "${p.nombre}"?`,
+      confirmText: 'Eliminar',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`/api/periodos/${p.id}`, { method: 'DELETE' });
+          setPeriodos((prev) => prev.filter((x) => x.id !== p.id));
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar.');
+        }
+      },
+    });
   };
 
   return (
@@ -234,6 +237,19 @@ export default function PeriodosScreen() {
           </ThemedView>
         </View>
       </Modal>
+      {confirmState && (
+        <ConfirmModal
+          visible={true}
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmText={confirmState.confirmText}
+          onConfirm={async () => {
+            await confirmState.onConfirm();
+            setConfirmState(null);
+          }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </ScreenShell>
   );
 }

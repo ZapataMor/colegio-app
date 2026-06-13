@@ -156,6 +156,39 @@ const deleteHorario = async (id) => {
   return result.affectedRows > 0;
 };
 
+const findExactHorario = async ({ cursoId, profesorId, asignaturaId, salonId, diaSemana, horaInicio, horaFin, excludeId = null }) => {
+  let query = `${baseSelect} WHERE h.curso_id = ? AND h.profesor_id = ? AND h.asignatura_id = ? AND h.salon_id = ? AND h.dia_semana = ? AND h.hora_inicio = ? AND h.hora_fin = ?`;
+  const params = [cursoId, profesorId, asignaturaId, salonId, diaSemana, horaInicio, horaFin];
+  if (excludeId) {
+    query += ` AND h.id != ?`;
+    params.push(excludeId);
+  }
+  const [rows] = await pool.query(query, params);
+  return rows[0] || null;
+};
+
+const findSameAsignaturaDay = async ({ cursoId, asignaturaId, diaSemana, excludeId = null }) => {
+  let query = `${baseSelect} WHERE h.curso_id = ? AND h.asignatura_id = ? AND h.dia_semana = ?`;
+  const params = [cursoId, asignaturaId, diaSemana];
+  if (excludeId) {
+    query += ` AND h.id != ?`;
+    params.push(excludeId);
+  }
+  const [rows] = await pool.query(query, params);
+  return rows[0] || null;
+};
+
+const findOverlapsByField = async ({ field, value, diaSemana, horaInicio, horaFin, excludeId = null }) => {
+  let query = `${baseSelect} WHERE h.dia_semana = ? AND h.hora_inicio < ? AND h.hora_fin > ? AND h.${field} = ?`;
+  const params = [diaSemana, horaFin, horaInicio, value];
+  if (excludeId) {
+    query += ` AND h.id != ?`;
+    params.push(excludeId);
+  }
+  const [rows] = await pool.query(query, params);
+  return rows;
+};
+
 const getCatalog = async () => {
   const [cursos] = await pool.query(
     `SELECT id, nombre, nivel, jornada FROM cursos WHERE estado = 'activo' ORDER BY nombre ASC`
@@ -183,5 +216,8 @@ module.exports = {
   create,
   update,
   deleteHorario,
+  findExactHorario,
+  findSameAsignaturaDay,
+  findOverlapsByField,
   getCatalog,
 };
