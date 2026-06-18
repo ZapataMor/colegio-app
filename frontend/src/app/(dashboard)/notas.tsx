@@ -225,11 +225,10 @@ function ProfesorNotasScreen() {
     [catalog.periodos, periodoId]
   );
 
-  const minActivityDate = useMemo(() => {
-    const periodStart = selectedPeriodo?.fecha_inicio?.slice(0, 10) || today();
-    const currentDay = today();
-    return periodStart > currentDay ? periodStart : currentDay;
-  }, [selectedPeriodo]);
+  const minActivityDate = useMemo(
+    () => selectedPeriodo?.fecha_inicio?.slice(0, 10) || today(),
+    [selectedPeriodo]
+  );
 
   const maxActivityDate = selectedPeriodo?.fecha_fin?.slice(0, 10) || '';
   const hasActivityDateWindow = Boolean(
@@ -354,11 +353,6 @@ function ProfesorNotasScreen() {
 
     if (selectedPeriodo?.estado !== 'activo') {
       Alert.alert('Periodo no activo', 'Solo puedes crear actividades dentro del periodo academico activo.');
-      return;
-    }
-
-    if (activityForm.fecha < today()) {
-      Alert.alert('Fecha no valida', 'La fecha de la actividad no puede ser anterior a la fecha actual.');
       return;
     }
 

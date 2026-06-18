@@ -11,12 +11,6 @@ const toDateString = (value) => {
   return String(value || "").slice(0, 10);
 };
 
-const todayString = () => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 10);
-};
-
 const getNotasPorCurso = async (req, res, next) => {
   try {
     if (!["profesor", "administrador"].includes(req.user?.rol)) {
@@ -150,13 +144,6 @@ const createActividad = async (req, res, next) => {
     }
 
     const fechaActividad = String(fecha).slice(0, 10);
-    if (fechaActividad < todayString()) {
-      return res.status(400).json({
-        ok: false,
-        message: "La fecha de la actividad no puede ser anterior a la fecha actual.",
-      });
-    }
-
     const fechaInicio = toDateString(periodo.fecha_inicio);
     const fechaFin = toDateString(periodo.fecha_fin);
     if (fechaActividad < fechaInicio || fechaActividad > fechaFin) {
