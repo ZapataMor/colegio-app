@@ -102,11 +102,17 @@ const getCatalog = async ({ profesorPersonaId = null } = {}) => {
        ORDER BY fecha_inicio DESC`
     );
 
+    const [periodoAsignaturas] = await pool.query(
+      `SELECT periodo_id, asignatura_id, estado
+       FROM periodo_asignaturas
+       WHERE estado = 'activo'`
+    );
+
     const [cursos] = await pool.query(
       `SELECT id, nombre FROM cursos WHERE estado = 'activo' ORDER BY nombre ASC`
     );
 
-    return { estudiantes, asignaturas, profesores, periodos, cursos };
+    return { estudiantes, asignaturas, profesores, periodos, cursos, periodoAsignaturas };
   }
 
   const params = [];
@@ -157,7 +163,13 @@ const getCatalog = async ({ profesorPersonaId = null } = {}) => {
      ORDER BY fecha_inicio DESC`
   );
 
-  return { asignaturas, profesores, periodos, cursos };
+  const [periodoAsignaturas] = await pool.query(
+    `SELECT periodo_id, asignatura_id, estado
+     FROM periodo_asignaturas
+     WHERE estado = 'activo'`
+  );
+
+  return { asignaturas, profesores, periodos, cursos, periodoAsignaturas };
 };
 
 const create = async ({ estudianteId, cursoId, asignaturaId, profesorId, periodoId, nota, observacion }) => {
@@ -347,6 +359,24 @@ const periodoExists = async (periodoId) => {
   return Boolean(rows[0]);
 };
 
+const asignaturaPertenecePeriodo = async ({ periodoId, asignaturaId }) => {
+  const [configured] = await pool.query(
+    `SELECT id FROM periodo_asignaturas WHERE periodo_id = ? LIMIT 1`,
+    [periodoId]
+  );
+
+  if (!configured[0]) return true;
+
+  const [rows] = await pool.query(
+    `SELECT id
+     FROM periodo_asignaturas
+     WHERE periodo_id = ? AND asignatura_id = ? AND estado = 'activo'
+     LIMIT 1`,
+    [periodoId, asignaturaId]
+  );
+  return Boolean(rows[0]);
+};
+
 const findPeriodoById = async (periodoId) => {
   const [rows] = await pool.query(
     `SELECT id, nombre, fecha_inicio, fecha_fin, estado
@@ -397,6 +427,9 @@ const findPorCurso = async ({
   if (!periodoId || !cursoId || !asignaturaId) {
     return null;
   }
+
+  const asignaturaHabilitada = await asignaturaPertenecePeriodo({ periodoId, asignaturaId });
+  if (!asignaturaHabilitada) return null;
 
   const profesorParams = profesorPersonaId ? [profesorPersonaId] : [];
   const profesorFilter = profesorPersonaId ? "AND pr.persona_id = ?" : "";
@@ -572,6 +605,7 @@ module.exports = {
   findPersonaIdByUsuarioId,
   estudiantePerteneceCurso,
   profesorTieneClase,
+  asignaturaPertenecePeriodo,
   periodoExists,
   findPeriodoById,
   findActividadById,

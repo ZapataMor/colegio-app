@@ -259,7 +259,13 @@ const getCatalog = async () => {
     ORDER BY fecha_inicio DESC`
   );
 
-  return { cursos, estudiantes, profesores, asignaturas, periodos };
+  const [periodoAsignaturas] = await pool.query(
+    `SELECT periodo_id, asignatura_id, estado
+     FROM periodo_asignaturas
+     WHERE estado = 'activo'`
+  );
+
+  return { cursos, estudiantes, profesores, asignaturas, periodos, periodoAsignaturas };
 };
 
 const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {}) => {
@@ -278,11 +284,29 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
   );
 
   const subjectParams = [];
-  let subjectProfessorFilter = "";
+  const subjectConditions = [];
   if (profesorPersonaId) {
-    subjectProfessorFilter = "WHERE pr.persona_id = ?";
+    subjectConditions.push("pr.persona_id = ?");
     subjectParams.push(profesorPersonaId);
   }
+
+  if (periodoId) {
+    subjectConditions.push(`(
+      NOT EXISTS (
+        SELECT 1 FROM periodo_asignaturas pax WHERE pax.periodo_id = ?
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM periodo_asignaturas pax
+        WHERE pax.periodo_id = ?
+          AND pax.asignatura_id = ca.asignatura_id
+          AND pax.estado = 'activo'
+      )
+    )`);
+    subjectParams.push(periodoId, periodoId);
+  }
+
+  const subjectWhere = subjectConditions.length ? `WHERE ${subjectConditions.join(" AND ")}` : "";
 
   const subjectSources = profesorPersonaId
     ? `SELECT h.curso_id, h.asignatura_id, h.profesor_id
@@ -308,7 +332,7 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
     ) ca
     INNER JOIN profesores pr ON pr.id = ca.profesor_id
     INNER JOIN asignaturas s ON s.id = ca.asignatura_id
-    ${subjectProfessorFilter}
+    ${subjectWhere}
     GROUP BY ca.curso_id, ca.asignatura_id, s.nombre
     ORDER BY s.nombre ASC`,
     subjectParams

@@ -169,7 +169,36 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 /* ------------------------------------------------------------
-   2. TABLAS DE ACTIVIDADES Y NOTAS POR ACTIVIDAD
+   2. ASIGNATURAS POR PERIODO
+   Relaciona las materias habilitadas en cada periodo sin romper
+   horarios, notas o asistencias ya existentes.
+   ------------------------------------------------------------ */
+
+CREATE TABLE IF NOT EXISTS periodo_asignaturas (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  periodo_id INT UNSIGNED NOT NULL,
+  asignatura_id INT UNSIGNED NOT NULL,
+  estado ENUM('activo','inactivo') NOT NULL DEFAULT 'activo',
+  observacion TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_periodo_asig_periodo FOREIGN KEY (periodo_id) REFERENCES periodos_academicos(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_periodo_asig_asignatura FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  UNIQUE KEY uq_periodo_asignatura (periodo_id, asignatura_id),
+  INDEX idx_periodo_asig_periodo_id (periodo_id),
+  INDEX idx_periodo_asig_asignatura_id (asignatura_id),
+  INDEX idx_periodo_asig_estado (estado)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO periodo_asignaturas (periodo_id, asignatura_id, estado, observacion)
+SELECT pa.id, a.id, 'activo', 'Asignatura habilitada para el periodo.'
+FROM periodos_academicos pa
+CROSS JOIN asignaturas a
+WHERE pa.estado = 'activo'
+  AND a.estado = 'activo';
+
+/* ------------------------------------------------------------
+   3. TABLAS DE ACTIVIDADES Y NOTAS POR ACTIVIDAD
    ------------------------------------------------------------ */
 
 CREATE TABLE IF NOT EXISTS actividades (

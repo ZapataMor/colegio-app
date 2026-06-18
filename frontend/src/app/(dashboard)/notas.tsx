@@ -37,11 +37,18 @@ type CatalogItem = {
   estado?: string;
 };
 
+type PeriodoAsignaturaLink = {
+  periodo_id: number;
+  asignatura_id: number;
+  estado: string;
+};
+
 type Catalog = {
   cursos: CatalogItem[];
   asignaturas: CatalogItem[];
   profesores: CatalogItem[];
   periodos: CatalogItem[];
+  periodoAsignaturas?: PeriodoAsignaturaLink[];
 };
 
 type Actividad = {
@@ -110,7 +117,7 @@ type AdminCursoAgrupado = {
   estudiantes: AdminEstudiante[];
 };
 
-const emptyCatalog: Catalog = { cursos: [], asignaturas: [], profesores: [], periodos: [] };
+const emptyCatalog: Catalog = { cursos: [], asignaturas: [], profesores: [], periodos: [], periodoAsignaturas: [] };
 const emptyActivityForm = { titulo: '', fecha: '', profesorId: '' };
 const emptyGradeForm = { nota: '', observacion: '' };
 
@@ -188,8 +195,20 @@ function ProfesorNotasScreen() {
   const [deletingActivityId, setDeletingActivityId] = useState<number | null>(null);
 
   const asignaturasCurso = useMemo(
-    () => catalog.asignaturas.filter((item) => !cursoId || String(item.curso_id) === cursoId),
-    [catalog.asignaturas, cursoId]
+    () => {
+      const periodoLinks = (catalog.periodoAsignaturas ?? []).filter(
+        (item) => String(item.periodo_id) === periodoId && item.estado === 'activo'
+      );
+      const periodoTieneAsignaturas = periodoLinks.length > 0;
+
+      return catalog.asignaturas.filter((item) => {
+        const sameCurso = !cursoId || String(item.curso_id) === cursoId;
+        const enabledForPeriod =
+          !periodoTieneAsignaturas || periodoLinks.some((link) => link.asignatura_id === item.id);
+        return sameCurso && enabledForPeriod;
+      });
+    },
+    [catalog.asignaturas, catalog.periodoAsignaturas, cursoId, periodoId]
   );
 
   const profesoresAsignados = useMemo(

@@ -188,6 +188,14 @@ const createActividad = async (req, res, next) => {
       });
     }
 
+    const asignaturaHabilitada = await notaModel.asignaturaPertenecePeriodo({ periodoId, asignaturaId });
+    if (!asignaturaHabilitada) {
+      return res.status(400).json({
+        ok: false,
+        message: "La asignatura seleccionada no esta habilitada para este periodo academico.",
+      });
+    }
+
     const id = await notaModel.createActividad({
       titulo,
       fecha,
@@ -358,6 +366,17 @@ const createNota = async (req, res, next) => {
       return res.status(403).json({
         ok: false,
         message: "Solo puedes registrar notas en salones y asignaturas que tengas asignados.",
+      });
+    }
+
+    const asignaturaHabilitada = await notaModel.asignaturaPertenecePeriodo({
+      periodoId: Number(periodoId),
+      asignaturaId: Number(asignaturaId),
+    });
+    if (!asignaturaHabilitada) {
+      return res.status(400).json({
+        ok: false,
+        message: "La asignatura seleccionada no esta habilitada para este periodo academico.",
       });
     }
 
