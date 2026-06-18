@@ -295,3 +295,83 @@ WHERE NOT EXISTS (
   WHERE nx.actividad_id = ac.id
     AND nx.estudiante_id = e.id
 );
+
+/* ------------------------------------------------------------
+   6. CARGA DE ASISTENCIAS DE EJEMPLO
+   Marca asistencia para TODOS los estudiantes en TODAS las
+   asignaturas que reciben (segun los horarios activos), en los
+   dias reales de clase de cada asignatura durante TODOS los
+   dias habiles (lunes a viernes) del periodo activo
+   (Periodo 2 - 2026: 06/04/2026 a 12/06/2026).
+
+   ~85% presente y ~15% ausente, de forma aleatoria.
+   INSERT IGNORE evita duplicar la marca ya existente
+   (clave unica estudiante_id + asignatura_id + fecha).
+   ------------------------------------------------------------ */
+
+INSERT IGNORE INTO asistencias
+  (estudiante_id, curso_id, asignatura_id, profesor_id, fecha, estado_asistencia, observacion)
+SELECT
+  e.id,
+  h.curso_id,
+  h.asignatura_id,
+  h.profesor_id,
+  d.fecha,
+  IF(RAND() < 0.85, 'presente', 'ausente'),
+  NULL
+FROM horarios h
+INNER JOIN estudiantes e
+  ON e.curso_id = h.curso_id AND e.estado = 'activo'
+INNER JOIN (
+  SELECT '2026-04-06' AS fecha, 'lunes'     AS dia UNION ALL
+  SELECT '2026-04-07', 'martes'     UNION ALL
+  SELECT '2026-04-08', 'miercoles'  UNION ALL
+  SELECT '2026-04-09', 'jueves'     UNION ALL
+  SELECT '2026-04-10', 'viernes'    UNION ALL
+  SELECT '2026-04-13', 'lunes'      UNION ALL
+  SELECT '2026-04-14', 'martes'     UNION ALL
+  SELECT '2026-04-15', 'miercoles'  UNION ALL
+  SELECT '2026-04-16', 'jueves'     UNION ALL
+  SELECT '2026-04-17', 'viernes'    UNION ALL
+  SELECT '2026-04-20', 'lunes'      UNION ALL
+  SELECT '2026-04-21', 'martes'     UNION ALL
+  SELECT '2026-04-22', 'miercoles'  UNION ALL
+  SELECT '2026-04-23', 'jueves'     UNION ALL
+  SELECT '2026-04-24', 'viernes'    UNION ALL
+  SELECT '2026-04-27', 'lunes'      UNION ALL
+  SELECT '2026-04-28', 'martes'     UNION ALL
+  SELECT '2026-04-29', 'miercoles'  UNION ALL
+  SELECT '2026-04-30', 'jueves'     UNION ALL
+  SELECT '2026-05-01', 'viernes'    UNION ALL
+  SELECT '2026-05-04', 'lunes'      UNION ALL
+  SELECT '2026-05-05', 'martes'     UNION ALL
+  SELECT '2026-05-06', 'miercoles'  UNION ALL
+  SELECT '2026-05-07', 'jueves'     UNION ALL
+  SELECT '2026-05-08', 'viernes'    UNION ALL
+  SELECT '2026-05-11', 'lunes'      UNION ALL
+  SELECT '2026-05-12', 'martes'     UNION ALL
+  SELECT '2026-05-13', 'miercoles'  UNION ALL
+  SELECT '2026-05-14', 'jueves'     UNION ALL
+  SELECT '2026-05-15', 'viernes'    UNION ALL
+  SELECT '2026-05-18', 'lunes'      UNION ALL
+  SELECT '2026-05-19', 'martes'     UNION ALL
+  SELECT '2026-05-20', 'miercoles'  UNION ALL
+  SELECT '2026-05-21', 'jueves'     UNION ALL
+  SELECT '2026-05-22', 'viernes'    UNION ALL
+  SELECT '2026-05-25', 'lunes'      UNION ALL
+  SELECT '2026-05-26', 'martes'     UNION ALL
+  SELECT '2026-05-27', 'miercoles'  UNION ALL
+  SELECT '2026-05-28', 'jueves'     UNION ALL
+  SELECT '2026-05-29', 'viernes'    UNION ALL
+  SELECT '2026-06-01', 'lunes'      UNION ALL
+  SELECT '2026-06-02', 'martes'     UNION ALL
+  SELECT '2026-06-03', 'miercoles'  UNION ALL
+  SELECT '2026-06-04', 'jueves'     UNION ALL
+  SELECT '2026-06-05', 'viernes'    UNION ALL
+  SELECT '2026-06-08', 'lunes'      UNION ALL
+  SELECT '2026-06-09', 'martes'     UNION ALL
+  SELECT '2026-06-10', 'miercoles'  UNION ALL
+  SELECT '2026-06-11', 'jueves'     UNION ALL
+  SELECT '2026-06-12', 'viernes'
+) d ON d.dia = h.dia_semana
+WHERE h.estado = 'activo';

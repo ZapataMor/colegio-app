@@ -28,13 +28,101 @@ const getAllAsistencias = async (req, res, next) => {
 
 const getAsistenciasPorCurso = async (req, res, next) => {
   try {
+    // El profesor siempre se filtra por su propia identidad (derivada del token),
+    // nunca por un parametro del cliente. El administrador ve todos los cursos.
+    let profesorPersonaId = null;
+    if (req.user?.rol === "profesor") {
+      profesorPersonaId = await getPersonaIdFromRequest(req);
+    }
+
     return res.json({
       ok: true,
       data: await asistenciaModel.findPorCurso({
         periodoId: req.query.periodoId ? Number(req.query.periodoId) : null,
-        profesorPersonaId: req.query.profesorPersonaId || null,
+        profesorPersonaId,
       }),
     });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getPersonaIdFromRequest = async (req) => {
+  if (req.user?.personaId) return req.user.personaId;
+  if (!req.user?.id) return null;
+  return asistenciaModel.findPersonaIdByUsuarioId(req.user.id);
+};
+
+const marcarAsistencia = async (req, res, next) => {
+  try {
+    if (req.user?.rol !== "profesor") {
+      return res.status(403).json({
+        ok: false,
+        message: "Solo un profesor puede registrar asistencias desde su salon asignado.",
+      });
+    }
+
+    const personaId = await getPersonaIdFromRequest(req);
+    const profesor = personaId ? await asistenciaModel.findProfesorByPersonaId(personaId) : null;
+    if (!profesor) {
+      return res.status(403).json({
+        ok: false,
+        message: "Tu usuario no tiene un perfil de profesor activo asociado.",
+      });
+    }
+
+    const estudianteId = Number(req.body.estudianteId);
+    const cursoId = Number(req.body.cursoId);
+    const asignaturaId = Number(req.body.asignaturaId);
+    const fecha = req.body.fecha;
+    const estadoAsistencia = req.body.estadoAsistencia;
+
+    if (!estudianteId || !cursoId || !asignaturaId || !fecha || !estadoAsistencia) {
+      return res.status(400).json({
+        ok: false,
+        message: "estudianteId, cursoId, asignaturaId, fecha y estadoAsistencia son obligatorios.",
+      });
+    }
+
+    if (!ESTADOS.includes(estadoAsistencia)) {
+      return res.status(400).json({ ok: false, message: "Estado de asistencia invalido." });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
+      return res.status(400).json({ ok: false, message: "La fecha debe tener formato YYYY-MM-DD." });
+    }
+
+    const pertenece = await asistenciaModel.estudiantePerteneceCurso(estudianteId, cursoId);
+    if (!pertenece) {
+      return res.status(400).json({
+        ok: false,
+        message: "El estudiante no pertenece al curso indicado.",
+      });
+    }
+
+    const tieneClase = await asistenciaModel.profesorTieneClase({
+      profesorId: profesor.id,
+      cursoId,
+      asignaturaId,
+    });
+    if (!tieneClase) {
+      return res.status(403).json({
+        ok: false,
+        message: "Solo puedes registrar asistencias en cursos y asignaturas que tengas asignados.",
+      });
+    }
+
+    await asistenciaModel.upsert({
+      estudianteId,
+      cursoId,
+      asignaturaId,
+      profesorId: profesor.id,
+      fecha,
+      estadoAsistencia,
+      observacion: req.body.observacion?.trim() || null,
+    });
+
+    return res.json({ ok: true, message: "Asistencia registrada correctamente." });
   } catch (error) {
     return next(error);
   }
@@ -192,6 +280,7 @@ const getAsistenciaCatalog = async (req, res, next) => {
 module.exports = {
   getAllAsistencias,
   getAsistenciasPorCurso,
+  marcarAsistencia,
   getAsistenciaById,
   createAsistencia,
   updateAsistencia,

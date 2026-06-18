@@ -128,6 +128,32 @@ const create = async (data) => {
   return result.insertId;
 };
 
+// Inserta o actualiza la marca de asistencia de un estudiante en una fecha
+// y asignatura concretas (clave unica estudiante_id + asignatura_id + fecha).
+const upsert = async (data) => {
+  const [result] = await pool.query(
+    `INSERT INTO asistencias
+      (estudiante_id, curso_id, asignatura_id, profesor_id, fecha, estado_asistencia, observacion)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE
+      estado_asistencia = VALUES(estado_asistencia),
+      profesor_id = VALUES(profesor_id),
+      observacion = VALUES(observacion),
+      updated_at = CURRENT_TIMESTAMP`,
+    [
+      data.estudianteId,
+      data.cursoId,
+      data.asignaturaId,
+      data.profesorId,
+      data.fecha,
+      data.estadoAsistencia,
+      data.observacion || null,
+    ]
+  );
+
+  return result;
+};
+
 const update = async (id, data) => {
   const fieldMap = {
     estudianteId: "estudiante_id",
@@ -390,13 +416,53 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
   return Array.from(cursosMap.values());
 };
 
+const findPersonaIdByUsuarioId = async (usuarioId) => {
+  const [rows] = await pool.query(
+    `SELECT persona_id FROM usuarios WHERE id = ? LIMIT 1`,
+    [usuarioId]
+  );
+  return rows[0]?.persona_id || null;
+};
+
+const findProfesorByPersonaId = async (personaId) => {
+  const [rows] = await pool.query(
+    `SELECT id, persona_id FROM profesores WHERE persona_id = ? AND estado = 'activo' LIMIT 1`,
+    [personaId]
+  );
+  return rows[0] || null;
+};
+
+const estudiantePerteneceCurso = async (estudianteId, cursoId) => {
+  const [rows] = await pool.query(
+    `SELECT id FROM estudiantes WHERE id = ? AND curso_id = ? AND estado = 'activo' LIMIT 1`,
+    [estudianteId, cursoId]
+  );
+  return Boolean(rows[0]);
+};
+
+const profesorTieneClase = async ({ profesorId, cursoId, asignaturaId }) => {
+  const [rows] = await pool.query(
+    `SELECT id
+     FROM horarios
+     WHERE profesor_id = ? AND curso_id = ? AND asignatura_id = ? AND estado = 'activo'
+     LIMIT 1`,
+    [profesorId, cursoId, asignaturaId]
+  );
+  return Boolean(rows[0]);
+};
+
 module.exports = {
   findAll,
   findById,
   create,
+  upsert,
   update,
   deleteAsistencia,
   getResumen,
   getCatalog,
   findPorCurso,
+  findPersonaIdByUsuarioId,
+  findProfesorByPersonaId,
+  estudiantePerteneceCurso,
+  profesorTieneClase,
 };
