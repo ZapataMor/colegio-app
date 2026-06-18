@@ -417,6 +417,29 @@ const ensurePeriodo = async ([nombre, fechaInicio, fechaFin, estado]) => {
   return fetchOne(`SELECT id, nombre FROM periodos_academicos WHERE nombre = ? LIMIT 1`, [nombre]);
 };
 
+const ensurePeriodoAsignaturas = async () => {
+  const table = await fetchOne(
+    `SELECT TABLE_NAME
+     FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'periodo_asignaturas'
+     LIMIT 1`
+  );
+
+  if (!table) return 0;
+
+  const [result] = await pool.query(
+    `INSERT IGNORE INTO periodo_asignaturas (periodo_id, asignatura_id, estado, observacion)
+     SELECT pa.id, a.id, 'activo', 'Asignatura habilitada para el periodo.'
+     FROM periodos_academicos pa
+     CROSS JOIN asignaturas a
+     WHERE pa.estado = 'activo'
+       AND a.estado = 'activo'`
+  );
+
+  return result.affectedRows || 0;
+};
+
 const ensureProfesor = async (profesor, roleByName) => {
   const [nombres, apellidos, documento, correo, telefono, especialidad, titulo] = profesor;
   const personaId = await ensurePersona({
@@ -531,7 +554,9 @@ const seedCatalogos = async () => {
     periodoByName[saved.nombre] = saved.id;
   }
 
-  return { roleByName, cursoByName, salonByName, asignaturaByName, periodoByName };
+  const periodoAsignaturas = await ensurePeriodoAsignaturas();
+
+  return { roleByName, cursoByName, salonByName, asignaturaByName, periodoByName, periodoAsignaturas };
 };
 
 const seedProfesores = async (roleByName, asignaturaByName) => {
@@ -712,6 +737,9 @@ const seed = async () => {
 
     const catalogos = await seedCatalogos();
     console.log("Catalogos listos: roles, cursos 1A-11C, salones, areas, asignaturas y periodos.");
+    if (catalogos.periodoAsignaturas) {
+      console.log(`Asignaturas por periodo listas: ${catalogos.periodoAsignaturas}.`);
+    }
 
     const profesorByEspecialidad = await seedProfesores(
       catalogos.roleByName,

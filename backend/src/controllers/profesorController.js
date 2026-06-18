@@ -1,5 +1,11 @@
 const profesorModel = require("../models/profesorModel");
 
+const getPersonaIdFromRequest = (req) => req.user?.personaId || null;
+
+const institution = {
+  nombre: "Institucion Educativa #2 Inmaculada",
+};
+
 /**
  * GET /api/profesores
  * Obtiene lista de todos los profesores con filtro opcional de estado
@@ -52,6 +58,40 @@ const getProfesorById = async (req, res, next) => {
       ok: true,
       message: "Profesor obtenido correctamente.",
       data: profesor,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getMiPerfil = async (req, res, next) => {
+  try {
+    if (req.user?.rol !== "profesor") {
+      return res.status(403).json({
+        ok: false,
+        message: "Solo un profesor puede consultar este perfil.",
+      });
+    }
+
+    const personaId = getPersonaIdFromRequest(req);
+    const profesor = personaId ? await profesorModel.findByPersonaId(personaId) : null;
+
+    if (!profesor) {
+      return res.status(404).json({
+        ok: false,
+        message: "No se encontro un perfil de profesor activo para tu usuario.",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: "Perfil del profesor obtenido correctamente.",
+      data: {
+        ...profesor,
+        nombre_completo: `${profesor.nombres} ${profesor.apellidos}`.trim(),
+        cargo: "Profesor",
+        institucion: institution.nombre,
+      },
     });
   } catch (error) {
     return next(error);
@@ -260,6 +300,7 @@ const deleteProfesor = async (req, res, next) => {
 module.exports = {
   getAllProfesores,
   getProfesorById,
+  getMiPerfil,
   createProfesor,
   updateProfesor,
   deleteProfesor,

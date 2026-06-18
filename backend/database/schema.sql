@@ -19,6 +19,7 @@ DROP TABLE IF EXISTS comunicados;
 DROP TABLE IF EXISTS matriculas;
 DROP TABLE IF EXISTS asistencias;
 DROP TABLE IF EXISTS notas;
+DROP TABLE IF EXISTS periodo_asignaturas;
 DROP TABLE IF EXISTS periodos_academicos;
 DROP TABLE IF EXISTS horarios;
 DROP TABLE IF EXISTS profesor_asignatura;
@@ -243,6 +244,22 @@ CREATE TABLE periodos_academicos (
   CONSTRAINT chk_periodos_fechas CHECK (fecha_fin >= fecha_inicio),
   INDEX idx_periodos_estado (estado),
   INDEX idx_periodos_fechas (fecha_inicio, fecha_fin)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE periodo_asignaturas (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  periodo_id INT UNSIGNED NOT NULL,
+  asignatura_id INT UNSIGNED NOT NULL,
+  estado ENUM('activo','inactivo') NOT NULL DEFAULT 'activo',
+  observacion TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_periodo_asig_periodo FOREIGN KEY (periodo_id) REFERENCES periodos_academicos(id) ON UPDATE CASCADE ON DELETE CASCADE,
+  CONSTRAINT fk_periodo_asig_asignatura FOREIGN KEY (asignatura_id) REFERENCES asignaturas(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  UNIQUE KEY uq_periodo_asignatura (periodo_id, asignatura_id),
+  INDEX idx_periodo_asig_periodo_id (periodo_id),
+  INDEX idx_periodo_asig_asignatura_id (asignatura_id),
+  INDEX idx_periodo_asig_estado (estado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE horarios (
@@ -710,6 +727,13 @@ INSERT INTO periodos_academicos (nombre, fecha_inicio, fecha_fin, estado) VALUES
 ('Periodo 2 - 2026', '2026-04-06', '2026-06-12', 'activo'),
 ('Periodo 3 - 2026', '2026-07-06', '2026-09-11', 'inactivo'),
 ('Periodo 4 - 2026', '2026-09-21', '2026-11-27', 'inactivo');
+
+INSERT INTO periodo_asignaturas (periodo_id, asignatura_id, estado, observacion)
+SELECT pa.id, a.id, 'activo', 'Asignatura habilitada para el periodo.'
+FROM periodos_academicos pa
+CROSS JOIN asignaturas a
+WHERE pa.nombre = 'Periodo 2 - 2026'
+  AND a.estado = 'activo';
 
 INSERT INTO notas (
   estudiante_id,

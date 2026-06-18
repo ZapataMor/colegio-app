@@ -3,6 +3,8 @@ const horarioGeneratorService = require("../services/horarioGeneratorService");
 
 const DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
 
+const getPersonaIdFromRequest = (req) => req.user?.personaId || null;
+
 const getAllHorarios = async (req, res, next) => {
   try {
     const horarios = await horarioModel.findAll({
@@ -18,6 +20,38 @@ const getAllHorarios = async (req, res, next) => {
     return res.json({
       ok: true,
       message: "Horarios obtenidos correctamente.",
+      data: horarios,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getMiHorario = async (req, res, next) => {
+  try {
+    if (req.user?.rol !== "profesor") {
+      return res.status(403).json({
+        ok: false,
+        message: "Solo un profesor puede consultar su horario asignado.",
+      });
+    }
+
+    const personaId = getPersonaIdFromRequest(req);
+    if (!personaId) {
+      return res.status(403).json({
+        ok: false,
+        message: "Tu usuario no tiene una persona asociada.",
+      });
+    }
+
+    const horarios = await horarioModel.findAll({
+      profesorPersonaId: personaId,
+      estado: "activo",
+    });
+
+    return res.json({
+      ok: true,
+      message: "Horario del profesor obtenido correctamente.",
       data: horarios,
     });
   } catch (error) {
@@ -411,6 +445,7 @@ const clearHorarios = async (req, res, next) => {
 
 module.exports = {
   getAllHorarios,
+  getMiHorario,
   getHorarioById,
   createHorario,
   updateHorario,

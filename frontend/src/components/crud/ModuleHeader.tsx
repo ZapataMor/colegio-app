@@ -20,7 +20,10 @@ export function ModuleHeader({ title, onAdd, addLabel = 'Nuevo' }: ModuleHeaderP
   return (
     <View style={[styles.header, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
       <Pressable
-        onPress={() => router.replace('/(dashboard)/dashboard')}
+        onPress={() => {
+          if (router.canGoBack()) router.back();
+          else router.replace('/(dashboard)/dashboard');
+        }}
         style={[styles.iconButton, { backgroundColor: theme.surfaceMuted }]}>
         <ArrowLeftIcon width={18} height={18} color={theme.text} />
       </Pressable>

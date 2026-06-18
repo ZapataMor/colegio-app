@@ -23,6 +23,11 @@ const findById = async (id) => {
   return rows[0] || null;
 };
 
+const findByPersonaId = async (personaId) => {
+  const [rows] = await pool.query(`${baseSelect} WHERE pr.persona_id = ? AND pr.estado = 'activo' LIMIT 1`, [personaId]);
+  return rows[0] || null;
+};
+
 const findAll = async ({ estado = null, q = null, limit = null } = {}) => {
   let query = baseSelect;
   const params = [];
@@ -221,6 +226,7 @@ const deleteProfesor = async (id) => {
 
 module.exports = {
   findById,
+  findByPersonaId,
   findAll,
   findByDocumento,
   findByCorreo,

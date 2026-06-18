@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -10,11 +11,16 @@ import {
   View,
 } from 'react-native';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
+import ArrowLeftIcon from 'react-native-heroicons/outline/ArrowLeftIcon';
+import ChevronLeftIcon from 'react-native-heroicons/outline/ChevronLeftIcon';
+import ChevronRightIcon from 'react-native-heroicons/outline/ChevronRightIcon';
 import PlusIcon from 'react-native-heroicons/outline/PlusIcon';
+import TrashIcon from 'react-native-heroicons/outline/TrashIcon';
 
 import { ScreenShell } from '@/components/screen-shell';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import ConfirmModal from '@/components/ui/ConfirmModal';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { apiFetch } from '@/lib/api';
@@ -26,7 +32,15 @@ type CatalogItem = {
   curso_id?: number;
   asignatura_id?: number;
   persona_id?: number;
+  fecha_inicio?: string;
+  fecha_fin?: string;
   estado?: string;
+};
+
+type PeriodoAsignaturaLink = {
+  periodo_id: number;
+  asignatura_id: number;
+  estado: string;
 };
 
 type Catalog = {
@@ -34,6 +48,7 @@ type Catalog = {
   asignaturas: CatalogItem[];
   profesores: CatalogItem[];
   periodos: CatalogItem[];
+  periodoAsignaturas?: PeriodoAsignaturaLink[];
 };
 
 type Actividad = {
@@ -102,14 +117,40 @@ type AdminCursoAgrupado = {
   estudiantes: AdminEstudiante[];
 };
 
-const emptyCatalog: Catalog = { cursos: [], asignaturas: [], profesores: [], periodos: [] };
+const emptyCatalog: Catalog = { cursos: [], asignaturas: [], profesores: [], periodos: [], periodoAsignaturas: [] };
 const emptyActivityForm = { titulo: '', fecha: '', profesorId: '' };
 const emptyGradeForm = { nota: '', observacion: '' };
 
 const COL = { estudiante: 190, actividad: 128, definitiva: 96 };
 const ADMIN_COL = { estudiante: 170, asignatura: 130 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const WEEK_DAYS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+const toDateValue = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const today = () => toDateValue(new Date());
+
+const parseDateValue = (value: string) => {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+};
+
+const addMonths = (value: string, offset: number) => {
+  const date = parseDateValue(`${value.slice(0, 7)}-01`);
+  date.setMonth(date.getMonth() + offset);
+  return toDateValue(date).slice(0, 7);
+};
+
+const monthLabel = (value: string) =>
+  parseDateValue(`${value.slice(0, 7)}-01`).toLocaleDateString('es-CO', {
+    month: 'long',
+    year: 'numeric',
+  });
 
 const gradeColor = (nota: number) => {
   if (nota >= 4.6) return '#8FBF26';
@@ -130,6 +171,7 @@ export default function NotasScreen() {
 
 function ProfesorNotasScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const session = getUserSession();
   const isProfesor = session?.rol === 'profesor';
   const canManage = isProfesor;
@@ -149,10 +191,24 @@ function ProfesorNotasScreen() {
   const [gradeTarget, setGradeTarget] = useState<GradeTarget | null>(null);
   const [gradeForm, setGradeForm] = useState(emptyGradeForm);
   const [saving, setSaving] = useState(false);
+  const [activityToDelete, setActivityToDelete] = useState<Actividad | null>(null);
+  const [deletingActivityId, setDeletingActivityId] = useState<number | null>(null);
 
   const asignaturasCurso = useMemo(
-    () => catalog.asignaturas.filter((item) => !cursoId || String(item.curso_id) === cursoId),
-    [catalog.asignaturas, cursoId]
+    () => {
+      const periodoLinks = (catalog.periodoAsignaturas ?? []).filter(
+        (item) => String(item.periodo_id) === periodoId && item.estado === 'activo'
+      );
+      const periodoTieneAsignaturas = periodoLinks.length > 0;
+
+      return catalog.asignaturas.filter((item) => {
+        const sameCurso = !cursoId || String(item.curso_id) === cursoId;
+        const enabledForPeriod =
+          !periodoTieneAsignaturas || periodoLinks.some((link) => link.asignatura_id === item.id);
+        return sameCurso && enabledForPeriod;
+      });
+    },
+    [catalog.asignaturas, catalog.periodoAsignaturas, cursoId, periodoId]
   );
 
   const profesoresAsignados = useMemo(
@@ -162,6 +218,22 @@ function ProfesorNotasScreen() {
       return sameCurso && sameAsignatura;
     }),
     [catalog.profesores, cursoId, asignaturaId]
+  );
+
+  const selectedPeriodo = useMemo(
+    () => catalog.periodos.find((item) => String(item.id) === periodoId) ?? null,
+    [catalog.periodos, periodoId]
+  );
+
+  const minActivityDate = useMemo(() => {
+    const periodStart = selectedPeriodo?.fecha_inicio?.slice(0, 10) || today();
+    const currentDay = today();
+    return periodStart > currentDay ? periodStart : currentDay;
+  }, [selectedPeriodo]);
+
+  const maxActivityDate = selectedPeriodo?.fecha_fin?.slice(0, 10) || '';
+  const hasActivityDateWindow = Boolean(
+    selectedPeriodo?.estado === 'activo' && maxActivityDate && minActivityDate <= maxActivityDate
   );
 
   const loadCatalog = useCallback(async () => {
@@ -239,6 +311,16 @@ function ProfesorNotasScreen() {
       return;
     }
 
+    if (selectedPeriodo?.estado !== 'activo') {
+      Alert.alert('Periodo no activo', 'Solo puedes crear actividades en el periodo academico activo.');
+      return;
+    }
+
+    if (!hasActivityDateWindow) {
+      Alert.alert('Sin fechas disponibles', 'No hay fechas disponibles en el periodo academico activo.');
+      return;
+    }
+
     const defaultProfesor = isProfesor
       ? profesoresAsignados[0]
       : profesoresAsignados.find((item) => String(item.persona_id) === String(session?.personaId)) ?? profesoresAsignados[0];
@@ -248,13 +330,40 @@ function ProfesorNotasScreen() {
       return;
     }
 
-    setActivityForm({ titulo: '', fecha: today(), profesorId: String(defaultProfesor.id) });
+    setActivityForm({ titulo: '', fecha: minActivityDate, profesorId: String(defaultProfesor.id) });
     setActivityModalVisible(true);
   };
 
   const saveActivity = async () => {
-    if (!activityForm.titulo.trim() || !activityForm.fecha || !activityForm.profesorId) {
-      Alert.alert('Faltan datos', 'Nombre, fecha y profesor son obligatorios.');
+    const titulo = activityForm.titulo.trim();
+
+    if (!titulo) {
+      Alert.alert('Nombre obligatorio', 'Escribe el nombre de la actividad antes de guardar.');
+      return;
+    }
+
+    if (!activityForm.fecha) {
+      Alert.alert('Fecha obligatoria', 'Selecciona la fecha de la actividad en el calendario.');
+      return;
+    }
+
+    if (!activityForm.profesorId) {
+      Alert.alert('Profesor requerido', 'No se encontro un profesor asignado para esta actividad.');
+      return;
+    }
+
+    if (selectedPeriodo?.estado !== 'activo') {
+      Alert.alert('Periodo no activo', 'Solo puedes crear actividades dentro del periodo academico activo.');
+      return;
+    }
+
+    if (activityForm.fecha < today()) {
+      Alert.alert('Fecha no valida', 'La fecha de la actividad no puede ser anterior a la fecha actual.');
+      return;
+    }
+
+    if (!maxActivityDate || activityForm.fecha < (selectedPeriodo?.fecha_inicio?.slice(0, 10) || '') || activityForm.fecha > maxActivityDate) {
+      Alert.alert('Fecha fuera del periodo', 'La fecha seleccionada debe estar dentro del periodo academico activo.');
       return;
     }
 
@@ -263,7 +372,7 @@ function ProfesorNotasScreen() {
       await apiFetch('/api/notas/actividades', {
         method: 'POST',
         body: {
-          titulo: activityForm.titulo.trim(),
+          titulo,
           fecha: activityForm.fecha,
           cursoId: Number(cursoId),
           asignaturaId: Number(asignaturaId),
@@ -273,11 +382,33 @@ function ProfesorNotasScreen() {
       });
       setActivityModalVisible(false);
       await loadMatrix();
+      Alert.alert('Actividad creada', 'La actividad fue registrada correctamente.');
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo crear la actividad.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const deleteActivity = async () => {
+    if (!activityToDelete) return;
+
+    try {
+      setDeletingActivityId(activityToDelete.id);
+      await apiFetch(`/api/notas/actividades/${activityToDelete.id}`, { method: 'DELETE' });
+      setActivityToDelete(null);
+      await loadMatrix();
+      Alert.alert('Actividad eliminada', 'La lista de actividades fue actualizada.');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar la actividad.');
+    } finally {
+      setDeletingActivityId(null);
+    }
+  };
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(dashboard)/dashboard');
   };
 
   const openGradeModal = (target: GradeTarget) => {
@@ -321,6 +452,9 @@ function ProfesorNotasScreen() {
     <ScreenShell contentStyle={styles.shell}>
       <View style={styles.contentStack}>
         <ThemedView type="backgroundElement" style={[styles.hero, { borderColor: theme.border }]}>
+          <Pressable onPress={goBack} style={[styles.backIconButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+            <ArrowLeftIcon width={18} height={18} color={theme.text} />
+          </Pressable>
           <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}24` }]}>
             <AcademicCapIcon width={20} height={20} color={theme.primary} />
           </View>
@@ -373,7 +507,13 @@ function ProfesorNotasScreen() {
             </Pressable>
           </ThemedView>
         ) : matrix ? (
-          <MatrizTable matrix={matrix} canManage={canManage} onEditGrade={openGradeModal} />
+          <MatrizTable
+            matrix={matrix}
+            canManage={canManage}
+            deletingActivityId={deletingActivityId}
+            onDeleteActivity={setActivityToDelete}
+            onEditGrade={openGradeModal}
+          />
         ) : (
           <ThemedView type="backgroundElement" style={[styles.center, styles.emptyBox]}>
             <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
@@ -390,6 +530,9 @@ function ProfesorNotasScreen() {
         profesores={profesoresAsignados}
         lockProfesor={isProfesor}
         saving={saving}
+        minDate={minActivityDate}
+        maxDate={maxActivityDate}
+        periodName={selectedPeriodo?.nombre ?? ''}
         onSave={saveActivity}
         onClose={() => setActivityModalVisible(false)}
       />
@@ -401,6 +544,15 @@ function ProfesorNotasScreen() {
         saving={saving}
         onSave={saveGrade}
         onClose={() => setGradeTarget(null)}
+      />
+
+      <ConfirmModal
+        visible={Boolean(activityToDelete)}
+        title="Eliminar actividad"
+        message={`Eliminar "${activityToDelete?.titulo ?? ''}" tambien quitara sus notas registradas. Esta accion no se puede deshacer.`}
+        confirmText="Eliminar"
+        onConfirm={deleteActivity}
+        onCancel={() => setActivityToDelete(null)}
       />
     </ScreenShell>
   );
@@ -650,10 +802,14 @@ function AdminNotaRow({
 function MatrizTable({
   matrix,
   canManage,
+  deletingActivityId,
+  onDeleteActivity,
   onEditGrade,
 }: {
   matrix: MatrizNotas;
   canManage: boolean;
+  deletingActivityId: number | null;
+  onDeleteActivity: (actividad: Actividad) => void;
   onEditGrade: (target: GradeTarget) => void;
 }) {
   const theme = useTheme();
@@ -679,9 +835,23 @@ function MatrizTable({
             <Th width={COL.estudiante}>Estudiante</Th>
             {matrix.actividades.map((actividad) => (
               <Th key={actividad.id} width={COL.actividad} align="center">
-                <ThemedText type="small" style={[styles.thText, { color: theme.textSecondary }]} numberOfLines={2}>
-                  {actividad.titulo}
-                </ThemedText>
+                <View style={styles.activityHeaderCell}>
+                  <ThemedText type="small" style={[styles.thText, { color: theme.textSecondary }]} numberOfLines={2}>
+                    {actividad.titulo}
+                  </ThemedText>
+                  {canManage ? (
+                    <Pressable
+                      disabled={deletingActivityId === actividad.id}
+                      onPress={() => onDeleteActivity(actividad)}
+                      style={[styles.deleteActivityBtn, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+                      {deletingActivityId === actividad.id ? (
+                        <ActivityIndicator size="small" color={theme.danger} />
+                      ) : (
+                        <TrashIcon width={13} height={13} color={theme.danger} />
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
                 <ThemedText type="small" style={[styles.thDate, { color: theme.textSecondary }]}>
                   {actividad.fecha}
                 </ThemedText>
@@ -764,6 +934,9 @@ function ActivityModal({
   profesores,
   lockProfesor,
   saving,
+  minDate,
+  maxDate,
+  periodName,
   onSave,
   onClose,
 }: {
@@ -773,6 +946,9 @@ function ActivityModal({
   profesores: CatalogItem[];
   lockProfesor: boolean;
   saving: boolean;
+  minDate: string;
+  maxDate: string;
+  periodName: string;
   onSave: () => void;
   onClose: () => void;
 }) {
@@ -789,11 +965,13 @@ function ActivityModal({
             onChangeText={(titulo) => setForm((current) => ({ ...current, titulo }))}
             placeholder="Ej. Quiz 1"
           />
-          <Field
+          <CalendarDatePicker
             label="Fecha *"
             value={form.fecha}
-            onChangeText={(fecha) => setForm((current) => ({ ...current, fecha }))}
-            placeholder="YYYY-MM-DD"
+            minDate={minDate}
+            maxDate={maxDate}
+            periodName={periodName}
+            onChange={(fecha) => setForm((current) => ({ ...current, fecha }))}
           />
           {!lockProfesor ? (
             <SelectField
@@ -807,6 +985,120 @@ function ActivityModal({
         </ThemedView>
       </View>
     </Modal>
+  );
+}
+
+function CalendarDatePicker({
+  label,
+  value,
+  minDate,
+  maxDate,
+  periodName,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  minDate: string;
+  maxDate: string;
+  periodName: string;
+  onChange: (value: string) => void;
+}) {
+  const theme = useTheme();
+  const [month, setMonth] = useState((value || minDate || today()).slice(0, 7));
+  const hasAvailableDates = Boolean(minDate && maxDate && minDate <= maxDate);
+
+  useEffect(() => {
+    setMonth((value || minDate || today()).slice(0, 7));
+  }, [value, minDate]);
+
+  const firstOfMonth = parseDateValue(`${month}-01`);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const start = new Date(firstOfMonth);
+  start.setDate(firstOfMonth.getDate() - startOffset);
+
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return toDateValue(date);
+  });
+
+  const previousMonth = addMonths(month, -1);
+  const nextMonth = addMonths(month, 1);
+  const canGoPrev = !minDate || previousMonth >= minDate.slice(0, 7);
+  const canGoNext = !maxDate || nextMonth <= maxDate.slice(0, 7);
+
+  return (
+    <View style={styles.field}>
+      <ThemedText type="small" style={styles.fieldLabel}>{label}</ThemedText>
+      <ThemedView type="backgroundElement" style={[styles.calendarBox, { borderColor: theme.border }]}>
+        <View style={styles.calendarTop}>
+          <Pressable
+            disabled={!canGoPrev}
+            onPress={() => setMonth(previousMonth)}
+            style={[styles.calendarArrow, { opacity: canGoPrev ? 1 : 0.35, backgroundColor: theme.surfaceMuted }]}>
+            <ChevronLeftIcon width={16} height={16} color={theme.text} />
+          </Pressable>
+          <View style={styles.calendarTitle}>
+            <ThemedText style={[styles.calendarMonth, { color: theme.text }]}>{monthLabel(month)}</ThemedText>
+            <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+              {periodName || 'Periodo activo'}
+            </ThemedText>
+          </View>
+          <Pressable
+            disabled={!canGoNext}
+            onPress={() => setMonth(nextMonth)}
+            style={[styles.calendarArrow, { opacity: canGoNext ? 1 : 0.35, backgroundColor: theme.surfaceMuted }]}>
+            <ChevronRightIcon width={16} height={16} color={theme.text} />
+          </Pressable>
+        </View>
+
+        {hasAvailableDates ? (
+          <>
+            <View style={styles.weekRow}>
+              {WEEK_DAYS.map((day, index) => (
+                <ThemedText key={`${day}-${index}`} type="small" style={[styles.weekLabel, { color: theme.textSecondary }]}>
+                  {day}
+                </ThemedText>
+              ))}
+            </View>
+            <View style={styles.calendarGrid}>
+              {days.map((day) => {
+                const inMonth = day.slice(0, 7) === month;
+                const disabled = !inMonth || day < minDate || day > maxDate;
+                const selected = day === value;
+
+                return (
+                  <Pressable
+                    key={day}
+                    disabled={disabled}
+                    onPress={() => onChange(day)}
+                    style={[
+                      styles.dayButton,
+                      {
+                        backgroundColor: selected ? theme.primary : disabled ? 'transparent' : theme.surfaceMuted,
+                        opacity: disabled ? 0.28 : 1,
+                      },
+                    ]}>
+                    <ThemedText
+                      type="small"
+                      style={[styles.dayButtonText, { color: selected ? theme.primaryText : theme.text }]}>
+                      {day.slice(8, 10)}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>
+              Fechas disponibles: {minDate} a {maxDate}.
+            </ThemedText>
+          </>
+        ) : (
+          <ThemedText type="small" style={{ color: theme.danger }}>
+            No hay fechas disponibles dentro del periodo academico activo.
+          </ThemedText>
+        )}
+      </ThemedView>
+    </View>
   );
 }
 
@@ -1011,6 +1303,7 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
     flexWrap: 'wrap',
   },
+  backIconButton: { width: 40, height: 40, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   heroIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   heroText: { flex: 1, minWidth: 180 },
   kicker: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0 },
@@ -1093,6 +1386,15 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   th: { paddingHorizontal: 8, justifyContent: 'center', minHeight: 48 },
+  activityHeaderCell: { minHeight: 42, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  deleteActivityBtn: {
+    width: 28,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   thText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0, textAlign: 'center' },
   thDate: { fontSize: 10, fontWeight: '600', marginTop: 2 },
   td: { paddingHorizontal: 8, justifyContent: 'center', minHeight: 46 },
@@ -1116,6 +1418,16 @@ const styles = StyleSheet.create({
   field: { gap: 4 },
   fieldLabel: { opacity: 0.68 },
   fieldInput: { minHeight: 42, borderWidth: 1, borderRadius: 6, paddingHorizontal: Spacing.two, justifyContent: 'center' },
+  calendarBox: { borderWidth: 1, borderRadius: 8, padding: Spacing.two, gap: Spacing.two },
+  calendarTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  calendarArrow: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  calendarTitle: { flex: 1, minWidth: 0, alignItems: 'center', gap: 2 },
+  calendarMonth: { fontSize: 15, fontWeight: '700', textTransform: 'capitalize' },
+  weekRow: { flexDirection: 'row', gap: 4 },
+  weekLabel: { width: 34, textAlign: 'center', fontWeight: '800' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  dayButton: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  dayButtonText: { fontWeight: '800' },
   selectTrigger: { flexDirection: 'row', alignItems: 'center' },
   dropdown: { borderWidth: 1, borderRadius: 6, marginTop: 2, zIndex: 99 },
   dropdownItem: { paddingHorizontal: Spacing.two, paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' },
