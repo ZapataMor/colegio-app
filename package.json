@@ -8,7 +8,8 @@
     "backend": "cd backend && npm run dev",
     "frontend": "cd frontend && npm start",
     "setup": "cd backend && npm install && cd ../frontend && npm install",
-    "seed": "cd backend && npm run seed"
+    "seed": "cd backend && npm run seed",
+    "seed:users": "cd backend && npm run seed:users"
   },
   "keywords": ["colegio", "login", "roles", "express", "expo"],
   "author": "",

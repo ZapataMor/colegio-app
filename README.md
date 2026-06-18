@@ -1,30 +1,31 @@
 # Colegio App - Login con roles
 
-Proyecto separado en backend y frontend para iniciar sesion desde una app movil con Expo Go.
+Proyecto separado en backend y frontend para una app escolar con Expo, Express y MySQL.
 
-## 🚀 Inicio Rápido
+## Inicio rapido
 
-### Opción 1: Ejecutar ambos servicios a la vez (RECOMENDADO)
+### Ejecutar ambos servicios
 
 ```bash
-# Desde la raiz del proyecto
 npm run dev:all
 ```
 
-Esto inicia automáticamente:
-- **Backend**: http://localhost:3001 (Express + MySQL)
-- **Frontend**: http://localhost:8081 (Expo Web)
+Esto inicia:
 
-### Opción 2: Ejecutar por separado
+- Backend: http://localhost:3001
+- Frontend: http://localhost:8081
 
-**Terminal 1 - Backend:**
+### Ejecutar por separado
+
 ```bash
 npm run backend
+npm run frontend
 ```
 
-**Terminal 2 - Frontend:**
+En PowerShell, si `npm` esta bloqueado por la politica de ejecucion, usa `npm.cmd`:
+
 ```bash
-npm run frontend
+npm.cmd run seed
 ```
 
 ## Estructura
@@ -32,8 +33,12 @@ npm run frontend
 ```text
 colegio-app/
   backend/
-    database/schema.sql
-    scripts/seedUsers.js
+    database/
+      schema.sql
+      alterations_2026_06_18_unificado.sql
+    scripts/
+      seed.js
+      seedUsers.js
     src/
       config/
       controllers/
@@ -41,39 +46,30 @@ colegio-app/
       models/
       routes/
       utils/
-      app.js
-      server.js
   frontend/
-    App.js
     src/
+      app/
       components/
-      context/
-      navigation/
-      screens/
-      services/
-      theme/
+      lib/
 ```
 
 ## Base de datos
 
-### Instalación inicial
+### Instalacion inicial
 
 ```bash
-# Desde la raiz del proyecto
 npm run setup
 ```
 
-Esto instala todas las dependencias de backend y frontend.
+### Configuracion
 
-### Configuración de BD
-
-1. Crea la base de datos y la tabla:
+1. Crea la base de datos y las tablas:
 
 ```bash
 mysql -u root -p < backend/database/schema.sql
 ```
 
-2. Ajusta tus datos de conexion en `backend/.env`:
+2. Ajusta la conexion en `backend/.env`:
 
 ```env
 NODE_ENV=development
@@ -86,22 +82,33 @@ DB_USERNAME=root
 DB_PASSWORD=
 ```
 
-3. Crea usuarios de prueba con contrasenas cifradas:
+3. Carga datos de prueba completos:
 
 ```bash
 npm run seed
 ```
 
-Usuarios creados:
+4. Si solo necesitas refrescar las claves de usuarios de prueba:
 
-| Usuario | Contrasena | Rol |
+```bash
+npm run seed:users
+```
+
+`seed:users` requiere que ya existan las tablas y los roles base.
+
+## Credenciales de prueba
+
+Despues de ejecutar `npm run seed`:
+
+| Correo | Contrasena | Rol |
 | --- | --- | --- |
-| admin | Admin123* | admin |
-| docente | Docente123* | docente |
+| admin@colegio.com | Admin123* | administrador |
+| diana.martinez@colegio.com | Docente123* | profesor |
+| claudia.gomez@colegio.com | Docente123* | profesor |
+| estudiante.1a.01@colegio.com | Estudiante123* | estudiante |
+| estudiante.1a.02@colegio.com | Estudiante123* | estudiante |
 
 ## Backend
-
-### Instalación y ejecución
 
 ```bash
 cd backend
@@ -109,47 +116,40 @@ npm install
 npm run dev
 ```
 
-El servidor Express corre en **http://localhost:3001**
+El servidor Express corre en http://localhost:3001.
 
-### Endpoints principales
+### Login
 
 ```http
-POST /api/auth/login
+POST /login
 Content-Type: application/json
 
 {
   "correo": "admin@colegio.com",
-  "password": "Admin123*"
+  "contrasena": "Admin123*"
 }
 ```
 
-**Respuesta exitosa (200):**
+Respuesta exitosa:
+
 ```json
 {
-  "ok": true,
-  "mensaje": "Login exitoso",
-  "data": {
-    "token": "eyJhbGc...",
-    "usuario": {
-      "id": 1,
-      "correo": "admin@colegio.com",
-      "rol": "administrador"
-    }
+  "message": "Login exitoso.",
+  "token": "eyJhbGc...",
+  "welcomeMessage": "Bienvenido al panel de administracion...",
+  "user": {
+    "id": 1,
+    "personaId": 1,
+    "nombre": "Admin",
+    "apellido": "Principal",
+    "correo": "admin@colegio.com",
+    "rol": "administrador",
+    "roles": ["administrador"]
   }
 }
 ```
 
-**Respuesta fallida (401):**
-```json
-{
-  "ok": false,
-  "mensaje": "Credenciales incorrectas"
-}
-```
-
 ## Frontend
-
-### Instalación y ejecución
 
 ```bash
 cd frontend
@@ -157,86 +157,38 @@ npm install
 npm start
 ```
 
-La app Expo corre en **http://localhost:8081** (web)
+La app Expo corre en http://localhost:8081 para web.
 
-### Acceso desde dispositivo móvil
+Para Expo Go en celular, configura la URL del backend con tu IP local:
 
-Si usas **Expo Go** en tu celular:
-
-1. Asegúrate de estar en la misma red Wi-Fi que el computador
-2. Escanea el código QR que aparece en la terminal
-3. La app se abrirá en Expo Go
-4. Antes de login, actualiza `API_URL` en `frontend/src/services/api.js`:
-
-```javascript
-const API_URL = "http://192.168.1.10:3001"; // Reemplaza con tu IP local
+```env
+EXPO_PUBLIC_API_URL=http://192.168.1.10:3001
 ```
 
-Para obtener tu IP local:
-```bash
-# Windows
-ipconfig
+En emulador Android puedes usar:
 
-# macOS/Linux
-ifconfig
+```env
+EXPO_PUBLIC_API_URL=http://10.0.2.2:3001
 ```
 
-**Nota:** En emulador Android puedes usar `http://10.0.2.2:3001`
+## Comandos disponibles
 
-## Flujo de login
-
-- El formulario pide solo `Usuario` y `Contrasena`.
-- El backend valida campos vacios, busca el usuario en MySQL y compara la contrasena con bcrypt.
-- Si las credenciales son correctas, devuelve un JWT y el rol.
-- El frontend guarda la sesion en AsyncStorage.
-- Si el rol es `admin`, abre el panel de administrador.
-- Si el rol es `docente`, abre el panel docente.
-- Si falla el login, muestra el mensaje de error.
-
-## 🔐 Credenciales de Prueba
-
-Después de ejecutar `npm run seed`:
-
-| Usuario | Contraseña | Rol |
-|---------|-----------|-----|
-| admin@colegio.com | Admin123* | administrador |
-| docente@colegio.com | Docente123* | profesor |
-
-**URL para login:**
-- Web: http://localhost:8081
-- API: http://localhost:3001/api/auth/login
-
-## 📋 Comandos Disponibles
-
-Desde la **raíz del proyecto**:
+Desde la raiz del proyecto:
 
 ```bash
-# Iniciar ambos servicios simultáneamente (RECOMENDADO)
 npm run dev:all
-
-# Instalar dependencias en backend y frontend
 npm run setup
-
-# Crear/resetear datos de prueba en BD
 npm run seed
-
-# Ejecutar solo backend
+npm run seed:users
 npm run backend
-
-# Ejecutar solo frontend
 npm run frontend
 ```
 
-## ⚙️ Tecnologías
+## Notas
 
-- **Backend:** Node.js, Express, MySQL2, JWT, bcryptjs
-- **Frontend:** React Native, Expo, TypeScript
-- **Base de Datos:** MySQL
-- **Autenticación:** JWT tokens con roles
-
-## 📝 Notas
-
-- Las contraseñas se cifran con bcryptjs antes de guardarse
-- Los tokens JWT expiran en 8 horas (configurable en `.env`)
-- El dashboard se adapta según el rol del usuario
-- CORS habilitado para desarrollo local
+- `backend/database/schema.sql` crea la estructura completa desde cero.
+- `backend/database/alterations_2026_06_18_unificado.sql` es para actualizar una base existente.
+- `backend/scripts/seed.js` carga catalogos, grados, cursos, salones, profesores, estudiantes, horarios, usuarios y notas.
+- `backend/scripts/seedUsers.js` solo asegura usuarios de prueba y sus contrasenas.
+- Las contrasenas se cifran con `bcryptjs`.
+- El dashboard se adapta segun el rol recibido en el login.
