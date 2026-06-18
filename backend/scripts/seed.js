@@ -15,6 +15,20 @@ const roles = [
   ["acudiente", "Consulta el rendimiento de sus acudidos"],
 ];
 
+const grados = [
+  ["Primero", 1, "Basica primaria"],
+  ["Segundo", 2, "Basica primaria"],
+  ["Tercero", 3, "Basica primaria"],
+  ["Cuarto", 4, "Basica primaria"],
+  ["Quinto", 5, "Basica primaria"],
+  ["Sexto", 6, "Basica secundaria"],
+  ["Septimo", 7, "Basica secundaria"],
+  ["Octavo", 8, "Basica secundaria"],
+  ["Noveno", 9, "Basica secundaria"],
+  ["Decimo", 10, "Media academica"],
+  ["Once", 11, "Media academica"],
+];
+
 const areas = [
   {
     nombre: "Matematicas",
@@ -233,6 +247,19 @@ const ensureRole = async (nombre, descripcion) => {
   return fetchOne(`SELECT id FROM roles WHERE nombre = ? LIMIT 1`, [nombre]);
 };
 
+const ensureGrado = async ([nombre, numericLevel, educationLevel]) => {
+  await execute(
+    `INSERT INTO grados (nombre, numeric_level, education_level, status)
+     VALUES (?, ?, ?, 'activo')
+     ON DUPLICATE KEY UPDATE nombre = VALUES(nombre), numeric_level = VALUES(numeric_level),
+       education_level = VALUES(education_level), status = 'activo', updated_at = CURRENT_TIMESTAMP`,
+    [nombre, numericLevel, educationLevel]
+  );
+  return fetchOne(`SELECT id, numeric_level FROM grados WHERE numeric_level = ? LIMIT 1`, [
+    numericLevel,
+  ]);
+};
+
 const ensurePersona = async ({
   nombres,
   apellidos,
@@ -332,13 +359,16 @@ const ensureLoginPersona = async (user) => {
   });
 };
 
-const ensureCurso = async (grado, seccion) => {
+const ensureCurso = async (grado, seccion, gradeId) => {
   const nombre = cursoNombre(grado, seccion);
+  const nivel = nivelPorGrado(grado);
   await execute(
-    `INSERT INTO cursos (nombre, nivel, estado)
-     VALUES (?, ?, 'activo')
-     ON DUPLICATE KEY UPDATE nivel = VALUES(nivel), estado = 'activo', updated_at = CURRENT_TIMESTAMP`,
-    [nombre, nivelPorGrado(grado)]
+    `INSERT INTO cursos (grade_id, nomenclature, full_name, nombre, nivel, max_students, estado)
+     VALUES (?, ?, ?, ?, ?, ?, 'activo')
+     ON DUPLICATE KEY UPDATE grade_id = VALUES(grade_id), nomenclature = VALUES(nomenclature),
+       full_name = VALUES(full_name), nivel = VALUES(nivel), max_students = VALUES(max_students),
+       estado = 'activo', updated_at = CURRENT_TIMESTAMP`,
+    [gradeId, seccion, nombre, nombre, nivel, capacidadPorGrado(grado)]
   );
   return fetchOne(`SELECT id, nombre FROM cursos WHERE nombre = ? LIMIT 1`, [nombre]);
 };
@@ -468,11 +498,17 @@ const seedCatalogos = async () => {
     roleByName[role[0]] = saved.id;
   }
 
+  const gradoByLevel = {};
+  for (const grado of grados) {
+    const saved = await ensureGrado(grado);
+    gradoByLevel[saved.numeric_level] = saved.id;
+  }
+
   const cursoByName = {};
   const salonByName = {};
   for (let grado = 1; grado <= 11; grado += 1) {
     for (const seccion of ["A", "B", "C"]) {
-      const curso = await ensureCurso(grado, seccion);
+      const curso = await ensureCurso(grado, seccion, gradoByLevel[grado]);
       const salon = await ensureSalon(grado, seccion);
       cursoByName[curso.nombre] = curso.id;
       salonByName[salon.nombre] = salon.id;
