@@ -284,21 +284,27 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
     subjectParams.push(profesorPersonaId);
   }
 
+  const subjectSources = profesorPersonaId
+    ? `SELECT h.curso_id, h.asignatura_id, h.profesor_id
+       FROM horarios h
+       WHERE h.estado = 'activo'`
+    : `SELECT h.curso_id, h.asignatura_id, h.profesor_id
+       FROM horarios h
+       WHERE h.estado = 'activo'
+       UNION
+       SELECT a.curso_id, a.asignatura_id, a.profesor_id
+       FROM asistencias a
+       UNION
+       SELECT n.curso_id, n.asignatura_id, n.profesor_id
+       FROM notas n`;
+
   const [asignaturasRows] = await pool.query(
     `SELECT
       ca.curso_id,
       ca.asignatura_id,
       s.nombre AS asignatura_nombre
     FROM (
-      SELECT h.curso_id, h.asignatura_id, h.profesor_id
-      FROM horarios h
-      WHERE h.estado = 'activo'
-      UNION
-      SELECT a.curso_id, a.asignatura_id, a.profesor_id
-      FROM asistencias a
-      UNION
-      SELECT n.curso_id, n.asignatura_id, n.profesor_id
-      FROM notas n
+      ${subjectSources}
     ) ca
     INNER JOIN profesores pr ON pr.id = ca.profesor_id
     INNER JOIN asignaturas s ON s.id = ca.asignatura_id
