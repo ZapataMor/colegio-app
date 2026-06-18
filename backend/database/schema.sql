@@ -400,10 +400,40 @@ INSERT INTO areas (nombre, descripcion) VALUES
 ('Educación Física', 'Deporte y salud'),
 ('Arte y Cultura', 'Expresion artistica y musical');
 
-INSERT INTO cursos (nombre, nivel, jornada) VALUES
-('6A', 'Básica secundaria', 'mañana'),
-('7B', 'Básica secundaria', 'mañana'),
-('10A', 'Media académica', 'tarde');
+INSERT INTO cursos (nombre, nivel) VALUES
+('1A', 'Basica primaria'),
+('1B', 'Basica primaria'),
+('1C', 'Basica primaria'),
+('2A', 'Basica primaria'),
+('2B', 'Basica primaria'),
+('2C', 'Basica primaria'),
+('3A', 'Basica primaria'),
+('3B', 'Basica primaria'),
+('3C', 'Basica primaria'),
+('4A', 'Basica primaria'),
+('4B', 'Basica primaria'),
+('4C', 'Basica primaria'),
+('5A', 'Basica primaria'),
+('5B', 'Basica primaria'),
+('5C', 'Basica primaria'),
+('6A', 'Basica secundaria'),
+('6B', 'Basica secundaria'),
+('6C', 'Basica secundaria'),
+('7A', 'Basica secundaria'),
+('7B', 'Basica secundaria'),
+('7C', 'Basica secundaria'),
+('8A', 'Basica secundaria'),
+('8B', 'Basica secundaria'),
+('8C', 'Basica secundaria'),
+('9A', 'Basica secundaria'),
+('9B', 'Basica secundaria'),
+('9C', 'Basica secundaria'),
+('10A', 'Media academica'),
+('10B', 'Media academica'),
+('10C', 'Media academica'),
+('11A', 'Media academica'),
+('11B', 'Media academica'),
+('11C', 'Media academica');
 
 INSERT INTO asignaturas (area_id, nombre, descripcion) VALUES
 (1, 'Matemáticas', 'Aritmetica, algebra y geometria'),
@@ -418,16 +448,288 @@ INSERT INTO asignaturas (area_id, nombre, descripcion) VALUES
 (7, 'Arte', 'Expresion plastica y visual');
 
 INSERT INTO salones (nombre, ubicacion, capacidad) VALUES
-('Salón 101', 'Bloque A - Piso 1', 35),
-('Salón 202', 'Bloque B - Piso 2', 30),
-('Laboratorio 1', 'Bloque C - Piso 1', 25),
-('Sala de Sistemas', 'Bloque D - Piso 1', 20);
+('Salon 1', 'Bloque Primaria - Piso 1', 20),
+('Salon 2', 'Bloque Primaria - Piso 1', 20),
+('Salon 3', 'Bloque Primaria - Piso 1', 20),
+('Salon 4', 'Bloque Primaria - Piso 1', 20),
+('Salon 5', 'Bloque Primaria - Piso 1', 20),
+('Salon 6', 'Bloque Primaria - Piso 1', 20),
+('Salon 7', 'Bloque Primaria - Piso 2', 20),
+('Salon 8', 'Bloque Primaria - Piso 2', 20),
+('Salon 9', 'Bloque Primaria - Piso 2', 20),
+('Salon 10', 'Bloque Primaria - Piso 2', 20),
+('Salon 11', 'Bloque Primaria - Piso 2', 20),
+('Salon 12', 'Bloque Primaria - Piso 2', 20),
+('Salon 13', 'Bloque Primaria - Piso 3', 20),
+('Salon 14', 'Bloque Primaria - Piso 3', 20),
+('Salon 15', 'Bloque Primaria - Piso 3', 20),
+('Salon 16', 'Bloque Secundaria - Piso 1', 20),
+('Salon 17', 'Bloque Secundaria - Piso 1', 20),
+('Salon 18', 'Bloque Secundaria - Piso 1', 20),
+('Salon 19', 'Bloque Secundaria - Piso 1', 20),
+('Salon 20', 'Bloque Secundaria - Piso 1', 20),
+('Salon 21', 'Bloque Secundaria - Piso 1', 20),
+('Salon 22', 'Bloque Secundaria - Piso 2', 20),
+('Salon 23', 'Bloque Secundaria - Piso 2', 20),
+('Salon 24', 'Bloque Secundaria - Piso 2', 20),
+('Salon 25', 'Bloque Secundaria - Piso 2', 20),
+('Salon 26', 'Bloque Secundaria - Piso 2', 20),
+('Salon 27', 'Bloque Secundaria - Piso 2', 20),
+('Salon 28', 'Bloque Media - Piso 1', 20),
+('Salon 29', 'Bloque Media - Piso 1', 20),
+('Salon 30', 'Bloque Media - Piso 1', 20),
+('Salon 31', 'Bloque Media - Piso 2', 20),
+('Salon 32', 'Bloque Media - Piso 2', 20),
+('Salon 33', 'Bloque Media - Piso 2', 20);
+
+INSERT INTO personas (nombres, apellidos, tipo_documento, documento, genero, telefono, correo, direccion) VALUES
+('Diana Carolina', 'Martinez Rojas', 'CC', '810000001', 'femenino', '3001000001', 'diana.martinez@colegio.com', 'Carrera Docente 1 #10-01'),
+('Andres Felipe', 'Ramirez Torres', 'CC', '810000002', 'masculino', '3001000002', 'andres.ramirez@colegio.com', 'Carrera Docente 1 #10-02'),
+('Claudia Patricia', 'Gomez Herrera', 'CC', '810000003', 'femenino', '3001000003', 'claudia.gomez@colegio.com', 'Carrera Docente 1 #10-03'),
+('Julian Andres', 'Castro Mejia', 'CC', '810000004', 'masculino', '3001000004', 'julian.castro@colegio.com', 'Carrera Docente 1 #10-04'),
+('Natalia', 'Herrera Vargas', 'CC', '810000005', 'femenino', '3001000005', 'natalia.herrera@colegio.com', 'Carrera Docente 1 #10-05'),
+('Camilo', 'Sanchez Moreno', 'CC', '810000006', 'masculino', '3001000006', 'camilo.sanchez@colegio.com', 'Carrera Docente 1 #10-06'),
+('Paola Andrea', 'Morales Diaz', 'CC', '810000007', 'femenino', '3001000007', 'paola.morales@colegio.com', 'Carrera Docente 1 #10-07'),
+('Sergio', 'Pineda Salazar', 'CC', '810000008', 'masculino', '3001000008', 'sergio.pineda@colegio.com', 'Carrera Docente 1 #10-08'),
+('Marcela', 'Rincon Alvarez', 'CC', '810000009', 'femenino', '3001000009', 'marcela.rincon@colegio.com', 'Carrera Docente 1 #10-09'),
+('Oscar', 'Navarro Cardenas', 'CC', '810000010', 'masculino', '3001000010', 'oscar.navarro@colegio.com', 'Carrera Docente 1 #10-10'),
+('Laura Vanessa', 'Ortega Leon', 'CC', '810000011', 'femenino', '3001000011', 'laura.ortega@colegio.com', 'Carrera Docente 1 #10-11'),
+('Rafael', 'Bermudez Silva', 'CC', '810000012', 'masculino', '3001000012', 'rafael.bermudez@colegio.com', 'Carrera Docente 1 #10-12'),
+('Monica', 'Vega Molina', 'CC', '810000013', 'femenino', '3001000013', 'monica.vega@colegio.com', 'Carrera Docente 1 #10-13'),
+('Hector', 'Quintero Ruiz', 'CC', '810000014', 'masculino', '3001000014', 'hector.quintero@colegio.com', 'Carrera Docente 1 #10-14'),
+('Patricia', 'Cortes Aguilar', 'CC', '810000015', 'femenino', '3001000015', 'patricia.cortes@colegio.com', 'Carrera Docente 1 #10-15');
+
+INSERT INTO persona_roles (persona_id, rol_id)
+SELECT p.id, r.id
+FROM personas p
+INNER JOIN roles r ON r.nombre = 'profesor'
+WHERE p.correo IN (
+  'diana.martinez@colegio.com',
+  'andres.ramirez@colegio.com',
+  'claudia.gomez@colegio.com',
+  'julian.castro@colegio.com',
+  'natalia.herrera@colegio.com',
+  'camilo.sanchez@colegio.com',
+  'paola.morales@colegio.com',
+  'sergio.pineda@colegio.com',
+  'marcela.rincon@colegio.com',
+  'oscar.navarro@colegio.com',
+  'laura.ortega@colegio.com',
+  'rafael.bermudez@colegio.com',
+  'monica.vega@colegio.com',
+  'hector.quintero@colegio.com',
+  'patricia.cortes@colegio.com'
+);
+
+INSERT INTO profesores (persona_id, especialidad, titulo)
+SELECT p.id,
+  CASE p.correo
+    WHEN 'diana.martinez@colegio.com' THEN 'Matematicas'
+    WHEN 'andres.ramirez@colegio.com' THEN 'Estadistica'
+    WHEN 'claudia.gomez@colegio.com' THEN 'Espanol'
+    WHEN 'julian.castro@colegio.com' THEN 'Ingles'
+    WHEN 'natalia.herrera@colegio.com' THEN 'Ciencias Naturales'
+    WHEN 'camilo.sanchez@colegio.com' THEN 'Biologia'
+    WHEN 'paola.morales@colegio.com' THEN 'Quimica'
+    WHEN 'sergio.pineda@colegio.com' THEN 'Fisica'
+    WHEN 'marcela.rincon@colegio.com' THEN 'Sociales'
+    WHEN 'oscar.navarro@colegio.com' THEN 'Filosofia'
+    WHEN 'laura.ortega@colegio.com' THEN 'Informatica'
+    WHEN 'rafael.bermudez@colegio.com' THEN 'Educacion Fisica'
+    WHEN 'monica.vega@colegio.com' THEN 'Arte'
+    WHEN 'hector.quintero@colegio.com' THEN 'Etica y Valores'
+    ELSE 'Religion'
+  END AS especialidad,
+  CASE p.correo
+    WHEN 'diana.martinez@colegio.com' THEN 'Licenciada en Matematicas'
+    WHEN 'andres.ramirez@colegio.com' THEN 'Magister en Educacion Matematica'
+    WHEN 'claudia.gomez@colegio.com' THEN 'Licenciada en Lengua Castellana'
+    WHEN 'julian.castro@colegio.com' THEN 'Licenciado en Lenguas Modernas'
+    WHEN 'natalia.herrera@colegio.com' THEN 'Licenciada en Ciencias Naturales'
+    WHEN 'camilo.sanchez@colegio.com' THEN 'Biologo'
+    WHEN 'paola.morales@colegio.com' THEN 'Quimica'
+    WHEN 'sergio.pineda@colegio.com' THEN 'Fisico'
+    WHEN 'marcela.rincon@colegio.com' THEN 'Licenciada en Ciencias Sociales'
+    WHEN 'oscar.navarro@colegio.com' THEN 'Filosofo'
+    WHEN 'laura.ortega@colegio.com' THEN 'Ingeniera de Sistemas'
+    WHEN 'rafael.bermudez@colegio.com' THEN 'Licenciado en Educacion Fisica'
+    WHEN 'monica.vega@colegio.com' THEN 'Maestra en Artes'
+    WHEN 'hector.quintero@colegio.com' THEN 'Licenciado en Filosofia y Etica'
+    ELSE 'Licenciada en Educacion Religiosa'
+  END AS titulo
+FROM personas p
+WHERE p.correo IN (
+  'diana.martinez@colegio.com',
+  'andres.ramirez@colegio.com',
+  'claudia.gomez@colegio.com',
+  'julian.castro@colegio.com',
+  'natalia.herrera@colegio.com',
+  'camilo.sanchez@colegio.com',
+  'paola.morales@colegio.com',
+  'sergio.pineda@colegio.com',
+  'marcela.rincon@colegio.com',
+  'oscar.navarro@colegio.com',
+  'laura.ortega@colegio.com',
+  'rafael.bermudez@colegio.com',
+  'monica.vega@colegio.com',
+  'hector.quintero@colegio.com',
+  'patricia.cortes@colegio.com'
+);
+
+INSERT INTO usuarios (persona_id, password_hash)
+SELECT p.id, '$2b$10$yMIuYfaKKuyeR8fIHgZuWOS7YgWxq9GpDL8g.dq1hM77Vr5JzX9Yu'
+FROM personas p
+WHERE p.correo IN (
+  'diana.martinez@colegio.com',
+  'andres.ramirez@colegio.com',
+  'claudia.gomez@colegio.com',
+  'julian.castro@colegio.com',
+  'natalia.herrera@colegio.com',
+  'camilo.sanchez@colegio.com',
+  'paola.morales@colegio.com',
+  'sergio.pineda@colegio.com',
+  'marcela.rincon@colegio.com',
+  'oscar.navarro@colegio.com',
+  'laura.ortega@colegio.com',
+  'rafael.bermudez@colegio.com',
+  'monica.vega@colegio.com',
+  'hector.quintero@colegio.com',
+  'patricia.cortes@colegio.com'
+);
+
+CREATE TEMPORARY TABLE tmp_estudiantes_base (
+  numero INT UNSIGNED NOT NULL PRIMARY KEY,
+  nombres VARCHAR(100) NOT NULL,
+  apellidos VARCHAR(100) NOT NULL,
+  genero ENUM('masculino','femenino','otro','no_especifica') NOT NULL
+);
+
+INSERT INTO tmp_estudiantes_base (numero, nombres, apellidos, genero) VALUES
+(1, 'Santiago', 'Lopez Garcia', 'masculino'),
+(2, 'Valentina', 'Rodriguez Perez', 'femenino'),
+(3, 'Mateo', 'Gonzalez Martinez', 'masculino'),
+(4, 'Isabella', 'Hernandez Sanchez', 'femenino'),
+(5, 'Sebastian', 'Ramirez Torres', 'masculino'),
+(6, 'Mariana', 'Diaz Vargas', 'femenino'),
+(7, 'Nicolas', 'Morales Castro', 'masculino'),
+(8, 'Salome', 'Rojas Moreno', 'femenino'),
+(9, 'Daniel', 'Jimenez Herrera', 'masculino'),
+(10, 'Gabriela', 'Ortiz Molina', 'femenino'),
+(11, 'Emmanuel', 'Silva Navarro', 'masculino'),
+(12, 'Antonella', 'Cortes Ruiz', 'femenino'),
+(13, 'Samuel', 'Pineda Leon', 'masculino'),
+(14, 'Luciana', 'Medina Alvarez', 'femenino'),
+(15, 'Juan Pablo', 'Vega Cardenas', 'masculino'),
+(16, 'Sara', 'Aguilar Salazar', 'femenino'),
+(17, 'Martin', 'Quintero Mejia', 'masculino'),
+(18, 'Maria Jose', 'Bermudez Ortega', 'femenino'),
+(19, 'Alejandro', 'Arias Castillo', 'masculino'),
+(20, 'Manuela', 'Mendoza Prieto', 'femenino');
+
+INSERT INTO personas (
+  nombres,
+  apellidos,
+  tipo_documento,
+  documento,
+  fecha_nacimiento,
+  genero,
+  telefono,
+  correo,
+  direccion
+)
+SELECT
+  eb.nombres,
+  eb.apellidos,
+  'TI',
+  CONCAT('71', LPAD(SUBSTRING(c.nombre, 1, CHAR_LENGTH(c.nombre) - 1), 2, '0'), ASCII(RIGHT(c.nombre, 1)), LPAD(eb.numero, 2, '0')),
+  STR_TO_DATE(
+    CONCAT(
+      2026 - (CAST(SUBSTRING(c.nombre, 1, CHAR_LENGTH(c.nombre) - 1) AS UNSIGNED) + 5),
+      '-',
+      LPAD(((eb.numero - 1) MOD 12) + 1, 2, '0'),
+      '-',
+      LPAD(((eb.numero * 3) MOD 27) + 1, 2, '0')
+    ),
+    '%Y-%m-%d'
+  ),
+  eb.genero,
+  CONCAT('310', LPAD(c.id, 3, '0'), LPAD(eb.numero, 4, '0')),
+  CONCAT('estudiante.', LOWER(c.nombre), '.', LPAD(eb.numero, 2, '0'), '@colegio.com'),
+  CONCAT('Barrio Escolar ', c.nombre, ', casa ', eb.numero)
+FROM cursos c
+CROSS JOIN tmp_estudiantes_base eb;
+
+INSERT INTO persona_roles (persona_id, rol_id)
+SELECT p.id, r.id
+FROM personas p
+INNER JOIN roles r ON r.nombre = 'estudiante'
+WHERE p.correo LIKE 'estudiante.%@colegio.com';
+
+INSERT INTO estudiantes (persona_id, curso_id, codigo_estudiante)
+SELECT
+  p.id,
+  c.id,
+  CONCAT('EST-2026-', c.nombre, '-', LPAD(eb.numero, 2, '0'))
+FROM cursos c
+CROSS JOIN tmp_estudiantes_base eb
+INNER JOIN personas p
+  ON p.documento = CONCAT('71', LPAD(SUBSTRING(c.nombre, 1, CHAR_LENGTH(c.nombre) - 1), 2, '0'), ASCII(RIGHT(c.nombre, 1)), LPAD(eb.numero, 2, '0'));
+
+INSERT INTO matriculas (estudiante_id, curso_id, anio, fecha_matricula, estado, observacion)
+SELECT
+  e.id,
+  e.curso_id,
+  2026,
+  '2026-01-18',
+  'activa',
+  CONCAT('Matricula academica 2026 para ', c.nombre)
+FROM estudiantes e
+INNER JOIN cursos c ON c.id = e.curso_id;
+
+DROP TEMPORARY TABLE tmp_estudiantes_base;
 
 INSERT INTO periodos_academicos (nombre, fecha_inicio, fecha_fin, estado) VALUES
 ('Periodo 1 - 2026', '2026-01-20', '2026-03-27', 'cerrado'),
 ('Periodo 2 - 2026', '2026-04-06', '2026-06-12', 'activo'),
 ('Periodo 3 - 2026', '2026-07-06', '2026-09-11', 'inactivo'),
 ('Periodo 4 - 2026', '2026-09-21', '2026-11-27', 'inactivo');
+
+INSERT INTO notas (
+  estudiante_id,
+  curso_id,
+  asignatura_id,
+  profesor_id,
+  periodo_id,
+  nota,
+  observacion,
+  fecha_registro
+)
+SELECT
+  e.id,
+  e.curso_id,
+  a.id,
+  pr.id,
+  pa.id,
+  ROUND(1 + (RAND() * 4), 1),
+  'Nota de prueba generada automaticamente.',
+  '2026-06-05'
+FROM estudiantes e
+CROSS JOIN asignaturas a
+INNER JOIN periodos_academicos pa ON pa.nombre = 'Periodo 2 - 2026'
+INNER JOIN personas pp
+  ON pp.correo = CASE a.id
+    WHEN 1 THEN 'diana.martinez@colegio.com'
+    WHEN 2 THEN 'andres.ramirez@colegio.com'
+    WHEN 3 THEN 'natalia.herrera@colegio.com'
+    WHEN 4 THEN 'paola.morales@colegio.com'
+    WHEN 5 THEN 'claudia.gomez@colegio.com'
+    WHEN 6 THEN 'julian.castro@colegio.com'
+    WHEN 7 THEN 'marcela.rincon@colegio.com'
+    WHEN 8 THEN 'laura.ortega@colegio.com'
+    WHEN 9 THEN 'rafael.bermudez@colegio.com'
+    ELSE 'monica.vega@colegio.com'
+  END
+INNER JOIN profesores pr ON pr.persona_id = pp.id;
 
 INSERT INTO comunicados (titulo, resumen, contenido, prioridad, audiencia, estado) VALUES
 ('Bienvenida al segundo periodo', 'Inicio del periodo academico activo para toda la comunidad.', 'Se recuerda a estudiantes, acudientes y docentes revisar cronogramas, horarios y compromisos del nuevo periodo academico.', 'alta', 'todos', 'publicado');

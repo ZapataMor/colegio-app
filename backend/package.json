@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "generate:horarios": "node scripts/generateHorarios.js"
   },
   "keywords": [],
   "author": "",

@@ -42,13 +42,14 @@ type Horario = {
   curso_nombre: string;
   curso_nivel: string | null;
   asignatura_nombre: string;
+  area_nombre: string | null;
   salon_nombre: string;
   salon_ubicacion: string | null;
   profesor_nombres: string;
   profesor_apellidos: string;
 };
 
-type CursoCatalog = { id: number; nombre: string; nivel: string | null };
+type CursoCatalog = { id: number; nombre: string; nivel: string | null; jornada?: string | null };
 type SalonCatalog = { id: number; nombre: string; ubicacion: string | null };
 
 type Catalog = {
@@ -70,13 +71,31 @@ type ScheduleRow = {
   cells: { dia: string; horario: Horario | null }[];
 };
 
+type ConflictValidation = {
+  valid: boolean;
+  conflicts: {
+    type: string;
+    message: string;
+    profesor?: string | null;
+    curso?: string | null;
+    dia?: string | null;
+    horaInicio?: string | null;
+    horaFin?: string | null;
+    asignatura?: string | null;
+  }[];
+  resumen: {
+    horarios: number;
+    cursos: number;
+    conflictos: number;
+  };
+};
+
 const DIAS = [
   { value: 'lunes', label: 'Lunes' },
   { value: 'martes', label: 'Martes' },
   { value: 'miercoles', label: 'Miercoles' },
   { value: 'jueves', label: 'Jueves' },
   { value: 'viernes', label: 'Viernes' },
-  { value: 'sabado', label: 'Sábado' },
 ];
 
 const COL = {
@@ -130,6 +149,10 @@ export default function HorariosScreen() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [printing, setPrinting] = useState(false);
+  const [selectedGrado, setSelectedGrado] = useState('');
+  const [selectedProfesorId, setSelectedProfesorId] = useState('');
+  const [generatorLoading, setGeneratorLoading] = useState(false);
+  const [validation, setValidation] = useState<ConflictValidation | null>(null);
   const [confirmState, setConfirmState] = useState<{
     title: string;
     message: string;
@@ -162,25 +185,37 @@ export default function HorariosScreen() {
     loadData();
   }, [loadData]);
 
+  const filteredHorarios = useMemo(() => {
+    if (!selectedProfesorId) return horarios;
+    return horarios.filter((item) => String(item.profesor_id) === selectedProfesorId);
+  }, [horarios, selectedProfesorId]);
+
   // Cursos visibles: para profesor solo aquellos donde tiene clases asignadas.
   const visibleCursos = useMemo(() => {
     const ordenar = (lista: CursoCatalog[]) =>
       [...lista].sort((a, b) => compareCurso(a.nombre, b.nombre));
 
-    if (session?.rol !== 'profesor') return ordenar(catalog.cursos);
+    const byGrade = (curso: CursoCatalog) => {
+      if (!selectedGrado) return true;
+      return String(parseCursoName(curso.nombre).grado) === selectedGrado;
+    };
 
-    const cursosConClase = new Set(horarios.map((item) => item.curso_id));
-    const propios = catalog.cursos.filter((curso) => cursosConClase.has(curso.id));
-    return ordenar(propios.length > 0 ? propios : catalog.cursos);
-  }, [catalog.cursos, horarios, session?.rol]);
+    if (session?.rol !== 'profesor' && !selectedProfesorId) {
+      return ordenar(catalog.cursos.filter(byGrade));
+    }
+
+    const cursosConClase = new Set(filteredHorarios.map((item) => item.curso_id));
+    const propios = catalog.cursos.filter((curso) => cursosConClase.has(curso.id) && byGrade(curso));
+    return ordenar(propios);
+  }, [catalog.cursos, filteredHorarios, selectedGrado, selectedProfesorId, session?.rol]);
 
   const bloquesPorCurso = useMemo(() => {
     const map = new Map<number, number>();
-    for (const item of horarios) {
+    for (const item of filteredHorarios) {
       map.set(item.curso_id, (map.get(item.curso_id) ?? 0) + 1);
     }
     return map;
-  }, [horarios]);
+  }, [filteredHorarios]);
 
   const selectedCurso = useMemo(
     () => visibleCursos.find((curso) => String(curso.id) === selectedCursoId) ?? null,
@@ -243,10 +278,12 @@ export default function HorariosScreen() {
   const salonIdForCurso = useCallback(
     (cursoNombre: string | undefined) => {
       if (!cursoNombre) return '';
-      const salon = catalog.salones.find((item) => item.nombre === `Salon ${cursoNombre}`);
+      const cursosOrdenados = [...catalog.cursos].sort((a, b) => compareCurso(a.nombre, b.nombre));
+      const cursoIndex = cursosOrdenados.findIndex((item) => item.nombre === cursoNombre);
+      const salon = catalog.salones.find((item) => item.nombre === `Salon ${cursoIndex + 1}`);
       return String(salon?.id ?? catalog.salones[0]?.id ?? '');
     },
-    [catalog.salones]
+    [catalog.cursos, catalog.salones]
   );
 
   const openCreate = (overrides: Partial<HorarioForm> = {}) => {
@@ -413,6 +450,64 @@ export default function HorariosScreen() {
     });
   };
 
+  const handleGenerate = () => {
+    setConfirmState({
+      title: 'Generar horarios',
+      message: 'Esto limpiara los horarios actuales y generara horarios de prueba para los 33 cursos.',
+      confirmText: 'Generar',
+      onConfirm: async () => {
+        setGeneratorLoading(true);
+        try {
+          const res = await apiFetch<{ validation: ConflictValidation }>('/api/horarios/generar', {
+            method: 'POST',
+            body: { limpiar: true },
+          });
+          setValidation(res.data?.validation ?? null);
+          await loadData();
+          Alert.alert('Listo', res.message ?? 'Horarios generados correctamente.');
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudieron generar los horarios.');
+        } finally {
+          setGeneratorLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleValidate = async () => {
+    setGeneratorLoading(true);
+    try {
+      const res = await apiFetch<ConflictValidation>('/api/horarios/conflictos');
+      setValidation(res.data ?? null);
+      Alert.alert('Verificacion', res.message ?? 'Verificacion completada.');
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo verificar el horario.');
+    } finally {
+      setGeneratorLoading(false);
+    }
+  };
+
+  const handleClearGenerated = () => {
+    setConfirmState({
+      title: 'Limpiar horarios',
+      message: 'Se eliminaran los bloques de horario. Se conservan cursos, salones, areas, asignaturas y profesores.',
+      confirmText: 'Limpiar',
+      onConfirm: async () => {
+        setGeneratorLoading(true);
+        try {
+          await apiFetch('/api/horarios/generados', { method: 'DELETE' });
+          setValidation(null);
+          setSelectedCursoId('');
+          await loadData();
+        } catch (err) {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudieron limpiar los horarios.');
+        } finally {
+          setGeneratorLoading(false);
+        }
+      },
+    });
+  };
+
   const printHorario = () => {
     if (!selectedCurso) {
       Alert.alert('Horario no disponible', 'Selecciona un curso para imprimir su horario.');
@@ -527,6 +622,26 @@ export default function HorariosScreen() {
             />
           }
           contentContainerStyle={styles.page}>
+          <ScheduleTools
+            canGenerate={session?.rol === 'administrador'}
+            loading={generatorLoading}
+            validation={validation}
+            selectedGrado={selectedGrado}
+            selectedProfesorId={selectedProfesorId}
+            profesores={catalog.profesores}
+            onGenerate={handleGenerate}
+            onValidate={handleValidate}
+            onClear={handleClearGenerated}
+            onChangeGrado={(grado) => {
+              setSelectedGrado(grado);
+              setSelectedCursoId('');
+            }}
+            onChangeProfesor={(profesorId) => {
+              setSelectedProfesorId(profesorId);
+              setSelectedCursoId('');
+            }}
+          />
+
           {!selectedCurso ? (
             <CursoList
               cursos={visibleCursos}
@@ -696,6 +811,106 @@ export default function HorariosScreen() {
         />
       )}
     </ScreenShell>
+  );
+}
+
+function ScheduleTools({
+  canGenerate,
+  loading,
+  validation,
+  selectedGrado,
+  selectedProfesorId,
+  profesores,
+  onGenerate,
+  onValidate,
+  onClear,
+  onChangeGrado,
+  onChangeProfesor,
+}: {
+  canGenerate: boolean;
+  loading: boolean;
+  validation: ConflictValidation | null;
+  selectedGrado: string;
+  selectedProfesorId: string;
+  profesores: { id: number; nombre: string }[];
+  onGenerate: () => void;
+  onValidate: () => void;
+  onClear: () => void;
+  onChangeGrado: (grado: string) => void;
+  onChangeProfesor: (profesorId: string) => void;
+}) {
+  const theme = useTheme();
+  const gradeOptions = [
+    { value: '', label: 'Todos' },
+    ...Array.from({ length: 11 }, (_, index) => ({
+      value: String(index + 1),
+      label: `${index + 1}`,
+    })),
+  ];
+  const teacherOptions = [
+    { value: '', label: 'Todos' },
+    ...profesores.map((item) => ({ value: String(item.id), label: item.nombre })),
+  ];
+  const previewConflicts = validation?.conflicts.slice(0, 4) ?? [];
+
+  return (
+    <ThemedView type="backgroundElement" style={[styles.toolsCard, { borderColor: theme.border }]}>
+      <View style={styles.toolsActions}>
+        {canGenerate ? (
+          <>
+            <Pressable
+              disabled={loading}
+              onPress={onGenerate}
+              style={[styles.toolButton, { backgroundColor: theme.primary, opacity: loading ? 0.65 : 1 }]}>
+              {loading ? (
+                <ActivityIndicator color={theme.primaryText} />
+              ) : (
+                <ThemedText style={{ color: theme.primaryText }}>Generar</ThemedText>
+              )}
+            </Pressable>
+            <Pressable
+              disabled={loading}
+              onPress={onClear}
+              style={[styles.toolButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border, borderWidth: 1 }]}>
+              <ThemedText style={{ color: theme.text }}>Limpiar</ThemedText>
+            </Pressable>
+          </>
+        ) : null}
+        <Pressable
+          disabled={loading}
+          onPress={onValidate}
+          style={[styles.toolButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border, borderWidth: 1 }]}>
+          <ThemedText style={{ color: theme.text }}>Verificar</ThemedText>
+        </Pressable>
+      </View>
+
+      <View style={styles.filtersGrid}>
+        <OptionChips label="Grado" options={gradeOptions} value={selectedGrado} onChange={onChangeGrado} />
+        <OptionChips label="Profesor" options={teacherOptions} value={selectedProfesorId} onChange={onChangeProfesor} />
+      </View>
+
+      {validation ? (
+        <View
+          style={[
+            styles.validationBox,
+            {
+              backgroundColor: validation.valid ? `${theme.accent}16` : `${theme.warning}18`,
+              borderColor: validation.valid ? theme.accent : theme.warning,
+            },
+          ]}>
+          <ThemedText style={[styles.validationTitle, { color: theme.text }]}>
+            {validation.valid
+              ? `Horario valido: ${validation.resumen.horarios} bloques sin conflictos.`
+              : `${validation.resumen.conflictos} conflicto(s) encontrados.`}
+          </ThemedText>
+          {previewConflicts.map((item, index) => (
+            <ThemedText key={`${item.type}-${index}`} type="small" style={{ color: theme.textSecondary }}>
+              {item.message}
+            </ThemedText>
+          ))}
+        </View>
+      ) : null}
+    </ThemedView>
   );
 }
 
@@ -876,6 +1091,9 @@ function ScheduleCell({
           <ThemedText style={[styles.subjectText, { color: theme.text }]} numberOfLines={2}>
             {horario.asignatura_nombre}
           </ThemedText>
+          <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+            {horario.area_nombre ?? 'Area academica'}
+          </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={2}>
             {getProfesorNombre(horario)}
           </ThemedText>
@@ -993,15 +1211,18 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
     return subjectColor.get(subject)!;
   };
 
-  const times = Array.from({ length: 13 }, (_, index) => {
-    const startHour = 7 + index;
-    const endHour = startHour + 1;
-    return {
-      start: `${String(startHour).padStart(2, '0')}:00:00`,
-      end: `${String(endHour).padStart(2, '0')}:00:00`,
-      label: `${String(startHour).padStart(2, '0')}:00 - ${String(endHour).padStart(2, '0')}:00`,
-    };
-  });
+  const times = Array.from(
+    new Map(
+      horarios.map((item) => [
+        `${item.hora_inicio}-${item.hora_fin}`,
+        {
+          start: normalizeTime(item.hora_inicio),
+          end: normalizeTime(item.hora_fin),
+          label: `${sliceTime(item.hora_inicio)} - ${sliceTime(item.hora_fin)}`,
+        },
+      ])
+    ).values()
+  ).sort((a, b) => a.start.localeCompare(b.start));
 
   const scheduleRows = times
     .map((slot) => {
@@ -1019,6 +1240,7 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
               return `
                 <div class="cell-block" style="background: ${color}; border-color: ${color};">
                   <strong>${escapeHtml(item.asignatura_nombre)}</strong>
+                  <span>${escapeHtml(item.area_nombre ?? '')}</span>
                   <span>${escapeHtml(getProfesorNombre(item))}</span>
                   <span>${escapeHtml(item.salon_nombre)}</span>
                 </div>
@@ -1052,6 +1274,7 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
       return `
         <tr>
           <td><span class="subject-pill" style="background:${color};">${escapeHtml(item.asignatura_nombre)}</span></td>
+          <td>${escapeHtml(item.area_nombre ?? '')}</td>
           <td>${escapeHtml(getProfesorNombre(item))}</td>
           <td>${escapeHtml(item.salon_nombre)}</td>
         </tr>
@@ -1241,6 +1464,7 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
               <thead>
                 <tr>
                   <th>Materia</th>
+                  <th>Area</th>
                   <th>Docente</th>
                   <th>Salón</th>
                 </tr>
@@ -1262,17 +1486,18 @@ function escapeHtml(value: string | number | null | undefined) {
     .replace(/'/g, '&#039;');
 }
 
+function parseCursoName(nombre: string) {
+  const match = /^(\d+)\s*([A-Za-z]*)/.exec(nombre.trim());
+  return {
+    grado: match ? Number(match[1]) : Number.MAX_SAFE_INTEGER,
+    seccion: match ? match[2].toUpperCase() : nombre.toUpperCase(),
+  };
+}
+
 // Ordena cursos del tipo "1A", "2B", "10C" por grado numerico y luego seccion.
 function compareCurso(a: string, b: string) {
-  const parse = (nombre: string) => {
-    const match = /^(\d+)\s*([A-Za-z]*)/.exec(nombre.trim());
-    return {
-      grado: match ? Number(match[1]) : Number.MAX_SAFE_INTEGER,
-      seccion: match ? match[2].toUpperCase() : nombre.toUpperCase(),
-    };
-  };
-  const pa = parse(a);
-  const pb = parse(b);
+  const pa = parseCursoName(a);
+  const pb = parseCursoName(b);
   return pa.grado - pb.grado || pa.seccion.localeCompare(pb.seccion);
 }
 
@@ -1325,6 +1550,18 @@ const styles = StyleSheet.create({
   heroTitle: {},
   heroSubtitle: { lineHeight: 22 },
   page: { gap: Spacing.three, paddingBottom: Spacing.five },
+  toolsCard: { borderRadius: 8, borderWidth: 1, padding: Spacing.three, gap: Spacing.three },
+  toolsActions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  toolButton: {
+    minHeight: 44,
+    borderRadius: 8,
+    paddingHorizontal: Spacing.three,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filtersGrid: { gap: Spacing.two },
+  validationBox: { borderWidth: 1, borderRadius: 8, padding: Spacing.three, gap: Spacing.one },
+  validationTitle: { fontWeight: '800' },
   cursoGrid: { gap: Spacing.two },
   cursoCard: {
     borderRadius: 18,

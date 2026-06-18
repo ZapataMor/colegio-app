@@ -15,6 +15,7 @@ const baseSelect = `SELECT
   c.nombre AS curso_nombre,
   c.nivel AS curso_nivel,
   a.nombre AS asignatura_nombre,
+  ar.nombre AS area_nombre,
   s.nombre AS salon_nombre,
   s.ubicacion AS salon_ubicacion,
   p.id AS profesor_persona_id,
@@ -23,6 +24,7 @@ const baseSelect = `SELECT
 FROM horarios h
 INNER JOIN cursos c ON c.id = h.curso_id
 INNER JOIN asignaturas a ON a.id = h.asignatura_id
+LEFT JOIN areas ar ON ar.id = a.area_id
 INNER JOIN salones s ON s.id = h.salon_id
 INNER JOIN profesores pr ON pr.id = h.profesor_id
 INNER JOIN personas p ON p.id = pr.persona_id`;

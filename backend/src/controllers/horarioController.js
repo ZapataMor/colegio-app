@@ -1,4 +1,5 @@
 const horarioModel = require("../models/horarioModel");
+const horarioGeneratorService = require("../services/horarioGeneratorService");
 
 const DIAS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"];
 
@@ -359,6 +360,55 @@ const getHorarioCatalog = async (req, res, next) => {
   }
 };
 
+const generateHorarios = async (req, res, next) => {
+  try {
+    const result = await horarioGeneratorService.generarHorarios({
+      limpiar: req.body?.limpiar !== false,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      message: "Horarios generados correctamente.",
+      data: result,
+    });
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({
+        ok: false,
+        message: error.message,
+        data: { details: error.details || [] },
+      });
+    }
+    return next(error);
+  }
+};
+
+const validateHorarios = async (req, res, next) => {
+  try {
+    const result = await horarioGeneratorService.validarConflictos();
+    return res.json({
+      ok: true,
+      message: result.valid ? "El horario es valido y no tiene conflictos." : "Se encontraron conflictos en el horario.",
+      data: result,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const clearHorarios = async (req, res, next) => {
+  try {
+    const deleted = await horarioGeneratorService.limpiarHorarios();
+    return res.json({
+      ok: true,
+      message: "Horarios eliminados correctamente.",
+      data: { deleted },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   getAllHorarios,
   getHorarioById,
@@ -366,4 +416,7 @@ module.exports = {
   updateHorario,
   deleteHorario,
   getHorarioCatalog,
+  generateHorarios,
+  validateHorarios,
+  clearHorarios,
 };
