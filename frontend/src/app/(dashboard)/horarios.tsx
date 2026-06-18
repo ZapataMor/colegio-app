@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
+import ArrowLeftIcon from 'react-native-heroicons/outline/ArrowLeftIcon';
 import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
 import ClockIcon from 'react-native-heroicons/outline/ClockIcon';
 
@@ -58,6 +60,16 @@ type Catalog = {
   salones: SalonCatalog[];
 };
 
+type ProfesorPerfil = {
+  id: number;
+  nombres: string;
+  apellidos: string;
+  nombre_completo?: string;
+  cargo?: string;
+  institucion?: string;
+  especialidad?: string | null;
+};
+
 type TimeSlot = {
   key: string;
   start: string;
@@ -82,6 +94,8 @@ const COL = {
   hora: 96,
   dia: 154,
 };
+
+const SUBJECT_COLORS = ['#0F766E', '#C9891A', '#2563EB', '#7C3AED', '#DC2626', '#0891B2', '#16A34A', '#EA580C'];
 
 type HorarioDay = {
   dia: string;
@@ -114,6 +128,16 @@ const institution = {
 };
 
 export default function HorariosScreen() {
+  const session = getUserSession();
+
+  if (session?.rol === 'profesor') {
+    return <ProfesorMiHorarioScreen />;
+  }
+
+  return <AdminHorariosScreen />;
+}
+
+function AdminHorariosScreen() {
   const theme = useTheme();
   const session = getUserSession();
   const canManage = session?.rol === 'administrador' || session?.rol === 'profesor';
@@ -919,6 +943,168 @@ export default function HorariosScreen() {
   );
 }
 
+function ProfesorMiHorarioScreen() {
+  const theme = useTheme();
+  const router = useRouter();
+  const session = getUserSession();
+  const [horarios, setHorarios] = useState<Horario[]>([]);
+  const [perfil, setPerfil] = useState<ProfesorPerfil | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadData = useCallback(async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      setError('');
+
+      const [horariosRes, perfilRes] = await Promise.all([
+        apiFetch<Horario[]>('/api/horarios/mi-horario'),
+        apiFetch<ProfesorPerfil>('/api/profesores/mi-perfil'),
+      ]);
+
+      setHorarios(horariosRes.data ?? []);
+      setPerfil(perfilRes.data ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar tu horario asignado.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const stats = useMemo(() => {
+    const asignaturas = new Set(horarios.map((item) => item.asignatura_id)).size;
+    const cursos = new Set(horarios.map((item) => item.curso_id)).size;
+    const dias = new Set(horarios.map((item) => item.dia_semana)).size;
+    return { bloques: horarios.length, asignaturas, cursos, dias };
+  }, [horarios]);
+
+  const timeSlots = useMemo(() => {
+    const slots = new Map<string, TimeSlot>();
+
+    for (const item of horarios) {
+      const key = `${item.hora_inicio}-${item.hora_fin}`;
+      if (!slots.has(key)) {
+        slots.set(key, {
+          key,
+          start: item.hora_inicio,
+          end: item.hora_fin,
+          label: `${sliceTime(item.hora_inicio)} - ${sliceTime(item.hora_fin)}`,
+        });
+      }
+    }
+
+    return Array.from(slots.values()).sort(
+      (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end)
+    );
+  }, [horarios]);
+
+  const scheduleRows = useMemo<ScheduleRow[]>(() => {
+    const byCell = new Map<string, Horario>();
+
+    for (const item of horarios) {
+      byCell.set(`${item.dia_semana}-${item.hora_inicio}-${item.hora_fin}`, item);
+    }
+
+    return timeSlots.map((slot) => ({
+      slot,
+      cells: DIAS.map((dia) => ({
+        dia: dia.value,
+        horario: byCell.get(`${dia.value}-${slot.start}-${slot.end}`) ?? null,
+      })),
+    }));
+  }, [horarios, timeSlots]);
+
+  const nombreCompleto =
+    perfil?.nombre_completo ||
+    `${perfil?.nombres ?? session?.nombre ?? ''} ${perfil?.apellidos ?? session?.apellido ?? ''}`.trim() ||
+    'Profesor';
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(dashboard)/dashboard');
+  };
+
+  return (
+    <ScreenShell contentStyle={styles.shellContent}>
+      <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+        <View style={styles.heroTop}>
+          <Pressable onPress={goBack} style={[styles.teacherBackButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+            <ArrowLeftIcon width={18} height={18} color={theme.text} />
+          </Pressable>
+          <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}20` }]}>
+            <CalendarDaysIcon width={22} height={22} color={theme.primary} />
+          </View>
+          <View style={styles.heroCopy}>
+            <ThemedText type="small" style={[styles.kicker, { color: theme.warning }]}>
+              Carga horaria
+            </ThemedText>
+            <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
+              Mis horarios
+            </ThemedText>
+            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+              Tu horario asignado se carga automaticamente.
+            </ThemedText>
+          </View>
+        </View>
+      </View>
+
+      {loading ? (
+        <SkeletonList />
+      ) : error ? (
+        <ErrorState
+          message={error}
+          onRetry={() => {
+            setLoading(true);
+            loadData();
+          }}
+        />
+      ) : (
+        <ScrollView
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadData(true);
+              }}
+            />
+          }
+          contentContainerStyle={styles.page}>
+          <TeacherProfileSummary
+            nombre={nombreCompleto}
+            cargo={perfil?.cargo ?? 'Profesor'}
+            institucion={perfil?.institucion ?? institution.name}
+            bloques={stats.bloques}
+          />
+
+          <View style={styles.statsGrid}>
+            <StatCard label="Bloques" value={String(stats.bloques)} />
+            <StatCard label="Asignaturas" value={String(stats.asignaturas)} />
+            <StatCard label="Cursos" value={String(stats.cursos)} />
+            <StatCard label="Dias" value={String(stats.dias)} />
+          </View>
+
+          {horarios.length === 0 ? (
+            <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+              <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                No tienes horarios asignados actualmente.
+              </ThemedText>
+            </ThemedView>
+          ) : (
+            <WeeklyScheduleTable canManage={false} showCurso rows={scheduleRows} />
+          )}
+        </ScrollView>
+      )}
+    </ScreenShell>
+  );
+}
+
 function SelectField({
   label,
   value,
@@ -1024,6 +1210,37 @@ function ProfesorSummary({ nombre, bloques, cursos }: { nombre: string; bloques:
   );
 }
 
+function TeacherProfileSummary({
+  nombre,
+  cargo,
+  institucion,
+  bloques,
+}: {
+  nombre: string;
+  cargo: string;
+  institucion: string;
+  bloques: number;
+}) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.roomSummary, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}20` }]}>
+        <AcademicCapIcon width={18} height={18} color={theme.primary} />
+      </View>
+      <View style={styles.roomCopy}>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {cargo}
+        </ThemedText>
+        <ThemedText style={[styles.roomName, { color: theme.text }]}>{nombre}</ThemedText>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {institucion} - {bloques} bloque{bloques === 1 ? '' : 's'} asignado{bloques === 1 ? '' : 's'}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
 function HorarioModeCard({ title, description, onPress }: { title: string; description: string; onPress: () => void }) {
   const theme = useTheme();
 
@@ -1061,6 +1278,18 @@ function WeeklyScheduleTable({
 }) {
   const theme = useTheme();
   const tableWidth = COL.hora + DIAS.length * COL.dia;
+  const subjectColors = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of rows) {
+      for (const cell of row.cells) {
+        const subject = cell.horario?.asignatura_nombre;
+        if (subject && !map.has(subject)) {
+          map.set(subject, SUBJECT_COLORS[map.size % SUBJECT_COLORS.length]);
+        }
+      }
+    }
+    return map;
+  }, [rows]);
 
   if (rows.length === 0) {
     return (
@@ -1104,6 +1333,7 @@ function WeeklyScheduleTable({
                   showCurso={showCurso}
                   dia={cell.dia}
                   horario={cell.horario}
+                  subjectColor={cell.horario ? subjectColors.get(cell.horario.asignatura_nombre) : undefined}
                   slot={row.slot}
                   onCreate={onCreate}
                   onDelete={onDelete}
@@ -1123,6 +1353,7 @@ function ScheduleCell({
   showCurso = false,
   dia,
   horario,
+  subjectColor,
   slot,
   onCreate,
   onDelete,
@@ -1132,6 +1363,7 @@ function ScheduleCell({
   showCurso?: boolean;
   dia: string;
   horario: Horario | null;
+  subjectColor?: string;
   slot: TimeSlot;
   onCreate?: (dia: string, slot: TimeSlot) => void;
   onDelete?: (item: Horario) => void;
@@ -1153,7 +1385,7 @@ function ScheduleCell({
       onLongPress={() => horario && onDelete?.(horario)}
       style={[styles.dayCell, { borderRightColor: theme.border }]}>
       {horario ? (
-        <View style={[styles.blockContent, { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}55` }]}>
+        <View style={[styles.blockContent, { backgroundColor: `${subjectColor ?? theme.primary}24`, borderColor: `${subjectColor ?? theme.primary}88` }]}>
           <ThemedText style={[styles.subjectText, { color: theme.text }]} numberOfLines={2}>
             {horario.asignatura_nombre}
           </ThemedText>
@@ -1165,7 +1397,7 @@ function ScheduleCell({
               {getProfesorNombre(horario)}
             </ThemedText>
           )}
-          <ThemedText type="small" style={[styles.courseText, { color: theme.primary }]} numberOfLines={1}>
+          <ThemedText type="small" style={[styles.courseText, { color: subjectColor ?? theme.primary }]} numberOfLines={1}>
             {horario.salon_nombre}
           </ThemedText>
         </View>
@@ -1621,6 +1853,7 @@ const styles = StyleSheet.create({
     opacity: 0.12,
   },
   heroTop: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },
+  teacherBackButton: { width: 40, height: 40, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   heroIcon: { width: 52, height: 52, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   heroCopy: { flex: 1, gap: 4 },
   kicker: { textTransform: 'uppercase', letterSpacing: 1.4, fontWeight: '700' },

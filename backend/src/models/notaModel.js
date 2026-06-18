@@ -97,7 +97,9 @@ const getCatalog = async ({ profesorPersonaId = null } = {}) => {
     );
 
     const [periodos] = await pool.query(
-      `SELECT id, nombre, estado FROM periodos_academicos ORDER BY fecha_inicio DESC`
+      `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+       FROM periodos_academicos
+       ORDER BY fecha_inicio DESC`
     );
 
     const [cursos] = await pool.query(
@@ -345,6 +347,17 @@ const periodoExists = async (periodoId) => {
   return Boolean(rows[0]);
 };
 
+const findPeriodoById = async (periodoId) => {
+  const [rows] = await pool.query(
+    `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+     FROM periodos_academicos
+     WHERE id = ?
+     LIMIT 1`,
+    [periodoId]
+  );
+  return rows[0] || null;
+};
+
 const findActividadById = async (id) => {
   const [rows] = await pool.query(
     `SELECT
@@ -513,6 +526,11 @@ const createActividad = async ({ titulo, fecha, cursoId, asignaturaId, periodoId
   return result.insertId;
 };
 
+const deleteActividad = async (id) => {
+  const [result] = await pool.query(`DELETE FROM actividades WHERE id = ?`, [id]);
+  return result.affectedRows > 0;
+};
+
 const upsertNotaActividad = async ({ actividadId, estudianteId, nota, observacion = null }) => {
   const [result] = await pool.query(
     `INSERT INTO notas_actividades (actividad_id, estudiante_id, nota, observacion)
@@ -555,8 +573,10 @@ module.exports = {
   estudiantePerteneceCurso,
   profesorTieneClase,
   periodoExists,
+  findPeriodoById,
   findActividadById,
   createActividad,
+  deleteActividad,
   upsertNotaActividad,
   findNotaActividadById,
   create,

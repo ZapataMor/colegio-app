@@ -5,6 +5,7 @@ const router = express.Router();
 
 router.get("/api/horarios/catalogo", horarioController.getHorarioCatalog);
 router.get("/api/horarios/conflictos", horarioController.validateHorarios);
+router.get("/api/horarios/mi-horario", horarioController.getMiHorario);
 router.post("/api/horarios/generar", horarioController.generateHorarios);
 router.delete("/api/horarios/generados", horarioController.clearHorarios);
 router.get("/api/horarios", horarioController.getAllHorarios);

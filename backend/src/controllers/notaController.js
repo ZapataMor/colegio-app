@@ -6,6 +6,17 @@ const getPersonaIdFromRequest = async (req) => {
   return notaModel.findPersonaIdByUsuarioId(req.user.id);
 };
 
+const toDateString = (value) => {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value || "").slice(0, 10);
+};
+
+const todayString = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 10);
+};
+
 const getNotasPorCurso = async (req, res, next) => {
   try {
     if (!["profesor", "administrador"].includes(req.user?.rol)) {
@@ -126,9 +137,33 @@ const createActividad = async (req, res, next) => {
       return res.status(400).json({ ok: false, message: "La fecha debe tener formato YYYY-MM-DD." });
     }
 
-    const periodoValido = await notaModel.periodoExists(periodoId);
-    if (!periodoValido) {
+    const periodo = await notaModel.findPeriodoById(periodoId);
+    if (!periodo) {
       return res.status(400).json({ ok: false, message: "El periodo academico no existe." });
+    }
+
+    if (periodo.estado !== "activo") {
+      return res.status(400).json({
+        ok: false,
+        message: "Solo puedes crear actividades dentro del periodo academico activo.",
+      });
+    }
+
+    const fechaActividad = String(fecha).slice(0, 10);
+    if (fechaActividad < todayString()) {
+      return res.status(400).json({
+        ok: false,
+        message: "La fecha de la actividad no puede ser anterior a la fecha actual.",
+      });
+    }
+
+    const fechaInicio = toDateString(periodo.fecha_inicio);
+    const fechaFin = toDateString(periodo.fecha_fin);
+    if (fechaActividad < fechaInicio || fechaActividad > fechaFin) {
+      return res.status(400).json({
+        ok: false,
+        message: `La fecha debe estar dentro del periodo academico activo (${fechaInicio} a ${fechaFin}).`,
+      });
     }
 
     if (req.user?.rol === "profesor") {
@@ -167,6 +202,43 @@ const createActividad = async (req, res, next) => {
       ok: true,
       message: "Actividad creada correctamente.",
       data: await notaModel.findActividadById(id),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const deleteActividad = async (req, res, next) => {
+  try {
+    if (!["profesor", "administrador"].includes(req.user?.rol)) {
+      return res.status(403).json({ ok: false, message: "No tienes permiso para eliminar actividades." });
+    }
+
+    const actividadId = Number(req.params.actividadId);
+    if (!actividadId) {
+      return res.status(400).json({ ok: false, message: "ID de actividad invalido." });
+    }
+
+    const actividad = await notaModel.findActividadById(actividadId);
+    if (!actividad) {
+      return res.status(404).json({ ok: false, message: "Actividad no encontrada." });
+    }
+
+    if (req.user?.rol === "profesor") {
+      const personaId = await getPersonaIdFromRequest(req);
+      if (actividad.profesor_persona_id !== personaId) {
+        return res.status(403).json({
+          ok: false,
+          message: "Solo puedes eliminar actividades creadas para tus asignaciones.",
+        });
+      }
+    }
+
+    await notaModel.deleteActividad(actividadId);
+
+    return res.json({
+      ok: true,
+      message: "Actividad eliminada correctamente.",
     });
   } catch (error) {
     return next(error);
@@ -380,6 +452,7 @@ module.exports = {
   getNotaCatalog,
   getNotasPorCurso,
   createActividad,
+  deleteActividad,
   upsertNotaActividad,
   createNota,
   updateNota,

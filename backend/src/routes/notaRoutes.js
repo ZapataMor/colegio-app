@@ -6,6 +6,7 @@ const router = express.Router();
 router.get("/api/notas/catalogo", notaController.getNotaCatalog);
 router.get("/api/notas/por-curso", notaController.getNotasPorCurso);
 router.post("/api/notas/actividades", notaController.createActividad);
+router.delete("/api/notas/actividades/:actividadId", notaController.deleteActividad);
 router.post("/api/notas/actividades/:actividadId/notas", notaController.upsertNotaActividad);
 router.get("/api/notas", notaController.getAllNotas);
 router.get("/api/notas/:id", notaController.getNotaById);

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'expo-router';
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import ArrowLeftIcon from 'react-native-heroicons/outline/ArrowLeftIcon';
 import CheckBadgeIcon from 'react-native-heroicons/outline/CheckBadgeIcon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
@@ -61,7 +63,27 @@ type Catalog = {
   periodos: Periodo[];
 };
 
+type HorarioClase = {
+  id: number;
+  curso_id: number;
+  asignatura_id: number;
+  dia_semana: string;
+  hora_inicio: string;
+  hora_fin: string;
+  estado: string;
+};
+
 const COL = { estudiante: 150, fecha: 54, porcentaje: 104 };
+
+const DIA_INDEX: Record<string, number> = {
+  domingo: 0,
+  lunes: 1,
+  martes: 2,
+  miercoles: 3,
+  jueves: 4,
+  viernes: 5,
+  sabado: 6,
+};
 
 const emptyCatalog: Catalog = {
   cursos: [],
@@ -388,10 +410,12 @@ function AdminFila({
 
 function ProfesorAsistenciasScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const session = getUserSession();
 
   const [cursos, setCursos] = useState<CursoAsistencia[]>([]);
   const [periodos, setPeriodos] = useState<Periodo[]>([]);
+  const [horarios, setHorarios] = useState<HorarioClase[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [periodoId, setPeriodoId] = useState('');
@@ -410,13 +434,15 @@ function ProfesorAsistenciasScreen() {
       if (session?.personaId) params.set('profesorPersonaId', String(session.personaId));
       const qs = params.toString() ? `?${params.toString()}` : '';
 
-      const [cursosRes, catalogRes] = await Promise.all([
+      const [cursosRes, catalogRes, horariosRes] = await Promise.all([
         apiFetch<CursoAsistencia[]>(`/api/asistencias/por-curso${qs}`),
         apiFetch<Catalog>('/api/asistencias/catalogo'),
+        apiFetch<HorarioClase[]>('/api/horarios/mi-horario'),
       ]);
 
       setCursos(cursosRes.data ?? []);
       setPeriodos(catalogRes.data?.periodos ?? []);
+      setHorarios(horariosRes.data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar las asistencias.');
     } finally {
@@ -441,9 +467,30 @@ function ProfesorAsistenciasScreen() {
     () => periodos.find((item) => String(item.id) === periodoId) ?? null,
     [periodos, periodoId]
   );
+
+  const horariosAsignados = useMemo(
+    () =>
+      selectedCurso && selectedAsignatura
+        ? horarios.filter(
+            (item) =>
+              item.estado === 'activo' &&
+              item.curso_id === selectedCurso.cursoId &&
+              item.asignatura_id === selectedAsignatura.asignaturaId
+          )
+        : [],
+    [horarios, selectedCurso, selectedAsignatura]
+  );
+
   const fechas = useMemo(
-    () => (selectedPeriodo ? weekdaysBetween(selectedPeriodo.fecha_inicio, selectedPeriodo.fecha_fin) : []),
-    [selectedPeriodo]
+    () =>
+      selectedPeriodo
+        ? classDatesBetween(
+            selectedPeriodo.fecha_inicio,
+            selectedPeriodo.fecha_fin,
+            horariosAsignados.map((item) => item.dia_semana)
+          )
+        : [],
+    [selectedPeriodo, horariosAsignados]
   );
 
   // Defaults de los selectores.
@@ -559,10 +606,19 @@ function ProfesorAsistenciasScreen() {
   };
 
   const readyToShow = Boolean(periodoId && selectedCurso && selectedAsignatura);
+  const hasAssignedSchedule = horariosAsignados.length > 0;
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(dashboard)/dashboard');
+  };
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
       <ThemedView type="backgroundElement" style={[styles.hero, { borderColor: theme.border }]}>
+        <Pressable onPress={goBack} style={[styles.backNavButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+          <ArrowLeftIcon width={18} height={18} color={theme.text} />
+        </Pressable>
         <View style={[styles.heroIcon, { backgroundColor: `${theme.accent}20` }]}>
           <CheckBadgeIcon width={22} height={22} color={theme.accent} />
         </View>
@@ -633,13 +689,27 @@ function ProfesorAsistenciasScreen() {
               </ThemedText>
             </View>
 
-            <ProfesorMatrix
-              estudiantes={selectedCurso?.estudiantes ?? []}
-              fechas={fechas}
-              marks={marks}
-              savingKey={savingKey}
-              onToggle={toggleMark}
-            />
+            {!hasAssignedSchedule ? (
+              <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+                <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                  No hay horarios asignados para esta asignatura y grupo.
+                </ThemedText>
+              </ThemedView>
+            ) : fechas.length === 0 ? (
+              <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+                <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                  El horario asignado no tiene fechas dentro del periodo seleccionado.
+                </ThemedText>
+              </ThemedView>
+            ) : (
+              <ProfesorMatrix
+                estudiantes={selectedCurso?.estudiantes ?? []}
+                fechas={fechas}
+                marks={marks}
+                savingKey={savingKey}
+                onToggle={toggleMark}
+              />
+            )}
           </View>
         </ScrollView>
       )}
@@ -896,6 +966,36 @@ function Td({ children, width, align = 'left' }: { children: ReactNode; width: n
   );
 }
 
+function toDateValue(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseDateValue(value: string): Date {
+  const [year, month, day] = value.slice(0, 10).split('-').map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function classDatesBetween(start: string, end: string, diasSemana: string[]): string[] {
+  const classDays = new Set(diasSemana.map((dia) => DIA_INDEX[dia]).filter((dia) => dia !== undefined));
+  if (!start || !end || classDays.size === 0) return [];
+
+  const result: string[] = [];
+  const cursor = parseDateValue(start);
+  const last = parseDateValue(end);
+
+  while (cursor <= last) {
+    if (classDays.has(cursor.getDay())) {
+      result.push(toDateValue(cursor));
+    }
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
+  return result;
+}
+
 // Devuelve los dias habiles (lunes a viernes) entre dos fechas YYYY-MM-DD.
 function weekdaysBetween(start: string, end: string): string[] {
   const result: string[] = [];
@@ -955,7 +1055,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.three,
+    flexWrap: 'wrap',
   },
+  backNavButton: { width: 40, height: 40, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   heroIcon: { width: 52, height: 52, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   heroCopy: { flex: 1, gap: 4 },
   kicker: { textTransform: 'uppercase', letterSpacing: 1, fontWeight: '700' },
