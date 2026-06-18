@@ -83,18 +83,22 @@ const findStudentInfo = async (estudianteId) => {
 };
 
 const findMaterias = async (estudianteId, periodoId) => {
+  // La nota final de cada asignatura es el promedio de las notas de las
+  // actividades registradas por el profesor (igual que el modulo de notas).
   const [rows] = await pool.query(
     `SELECT
-      n.id,
-      n.nota,
-      n.observacion,
+      ac.asignatura_id AS id,
+      ROUND(AVG(na.nota), 1) AS nota,
+      NULL AS observacion,
       a.nombre AS asignatura,
       CONCAT(p.nombres, ' ', p.apellidos) AS profesor
-    FROM notas n
-    INNER JOIN asignaturas a ON a.id = n.asignatura_id
-    INNER JOIN profesores pr ON pr.id = n.profesor_id
+    FROM notas_actividades na
+    INNER JOIN actividades ac ON ac.id = na.actividad_id
+    INNER JOIN asignaturas a ON a.id = ac.asignatura_id
+    INNER JOIN profesores pr ON pr.id = ac.profesor_id
     INNER JOIN personas p ON p.id = pr.persona_id
-    WHERE n.estudiante_id = ? AND n.periodo_id = ?
+    WHERE na.estudiante_id = ? AND ac.periodo_id = ?
+    GROUP BY ac.asignatura_id, a.nombre, profesor
     ORDER BY a.nombre ASC`,
     [estudianteId, periodoId]
   );

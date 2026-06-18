@@ -111,13 +111,6 @@ export const MODULOS_PROFESOR: Modulo[] = [
     icon: CrudIcons.list,
     ruta: '/(dashboard)/horarios',
   },
-  {
-    id: 'boletines',
-    nombre: 'Boletines',
-    descripcion: 'Consulta el reporte academico de tus estudiantes.',
-    icon: CrudIcons.document,
-    ruta: '/(dashboard)/boletines',
-  },
 ];
 
 export const MODULOS_ESTUDIANTE: Modulo[] = [

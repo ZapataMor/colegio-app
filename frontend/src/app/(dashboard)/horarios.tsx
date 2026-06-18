@@ -12,8 +12,6 @@ import {
 } from 'react-native';
 import AcademicCapIcon from 'react-native-heroicons/outline/AcademicCapIcon';
 import CalendarDaysIcon from 'react-native-heroicons/outline/CalendarDaysIcon';
-import ChevronLeftIcon from 'react-native-heroicons/outline/ChevronLeftIcon';
-import ChevronRightIcon from 'react-native-heroicons/outline/ChevronRightIcon';
 import ClockIcon from 'react-native-heroicons/outline/ClockIcon';
 
 import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
@@ -45,6 +43,7 @@ type Horario = {
   area_nombre: string | null;
   salon_nombre: string;
   salon_ubicacion: string | null;
+  profesor_persona_id: number;
   profesor_nombres: string;
   profesor_apellidos: string;
 };
@@ -69,25 +68,6 @@ type TimeSlot = {
 type ScheduleRow = {
   slot: TimeSlot;
   cells: { dia: string; horario: Horario | null }[];
-};
-
-type ConflictValidation = {
-  valid: boolean;
-  conflicts: {
-    type: string;
-    message: string;
-    profesor?: string | null;
-    curso?: string | null;
-    dia?: string | null;
-    horaInicio?: string | null;
-    horaFin?: string | null;
-    asignatura?: string | null;
-  }[];
-  resumen: {
-    horarios: number;
-    cursos: number;
-    conflictos: number;
-  };
 };
 
 const DIAS = [
@@ -151,8 +131,8 @@ export default function HorariosScreen() {
   const [printing, setPrinting] = useState(false);
   const [selectedGrado, setSelectedGrado] = useState('');
   const [selectedProfesorId, setSelectedProfesorId] = useState('');
-  const [generatorLoading, setGeneratorLoading] = useState(false);
-  const [validation, setValidation] = useState<ConflictValidation | null>(null);
+  const [adminVista, setAdminVista] = useState<'' | 'estudiantes' | 'profesores'>('');
+  const [profesorFullId, setProfesorFullId] = useState('');
   const [confirmState, setConfirmState] = useState<{
     title: string;
     message: string;
@@ -160,15 +140,22 @@ export default function HorariosScreen() {
     onConfirm: () => Promise<void> | void;
   } | null>(null);
 
+  const isProfesor = session?.rol === 'profesor';
+  const isAdmin = session?.rol === 'administrador';
+  const myPersonaId = session?.personaId ? Number(session.personaId) : null;
+
+  // El administrador elige primero entre "estudiantes" y "profesores".
+  // El profesor entra directo al flujo por curso (modo "estudiantes").
+  const enModoProfesores = isAdmin && adminVista === 'profesores';
+  const enMenuAdmin = isAdmin && adminVista === '';
+
   const loadData = useCallback(async () => {
     try {
       setError('');
-      const query =
-        session?.rol === 'profesor' && session.personaId
-          ? `?profesorPersonaId=${session.personaId}`
-          : '';
+      // Se cargan todos los bloques: el profesor tambien debe poder ver
+      // "Todos los profesores" dentro de los cursos en los que dicta clase.
       const [horariosRes, catalogRes] = await Promise.all([
-        apiFetch<Horario[]>(`/api/horarios${query}`),
+        apiFetch<Horario[]>('/api/horarios'),
         apiFetch<Catalog>('/api/horarios/catalogo'),
       ]);
       setHorarios(horariosRes.data ?? []);
@@ -179,70 +166,144 @@ export default function HorariosScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [session?.personaId, session?.rol]);
+  }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  const filteredHorarios = useMemo(() => {
-    if (!selectedProfesorId) return horarios;
-    return horarios.filter((item) => String(item.profesor_id) === selectedProfesorId);
-  }, [horarios, selectedProfesorId]);
-
-  // Cursos visibles: para profesor solo aquellos donde tiene clases asignadas.
-  const visibleCursos = useMemo(() => {
+  // Cursos disponibles: el administrador ve todos; el profesor solo los
+  // cursos en los que imparte alguna clase.
+  const availableCursos = useMemo(() => {
     const ordenar = (lista: CursoCatalog[]) =>
       [...lista].sort((a, b) => compareCurso(a.nombre, b.nombre));
 
-    const byGrade = (curso: CursoCatalog) => {
-      if (!selectedGrado) return true;
-      return String(parseCursoName(curso.nombre).grado) === selectedGrado;
-    };
+    if (!isProfesor) return ordenar(catalog.cursos);
 
-    if (session?.rol !== 'profesor' && !selectedProfesorId) {
-      return ordenar(catalog.cursos.filter(byGrade));
+    const cursosConClase = new Set(
+      horarios.filter((item) => item.profesor_persona_id === myPersonaId).map((item) => item.curso_id)
+    );
+    return ordenar(catalog.cursos.filter((curso) => cursosConClase.has(curso.id)));
+  }, [catalog.cursos, horarios, isProfesor, myPersonaId]);
+
+  // Grados disponibles segun los cursos visibles.
+  const gradeOptions = useMemo(() => {
+    const grados = new Set<number>();
+    for (const curso of availableCursos) {
+      grados.add(parseCursoName(curso.nombre).grado);
     }
+    return Array.from(grados)
+      .sort((a, b) => a - b)
+      .map((grado) => ({ value: String(grado), label: `Grado ${grado}` }));
+  }, [availableCursos]);
 
-    const cursosConClase = new Set(filteredHorarios.map((item) => item.curso_id));
-    const propios = catalog.cursos.filter((curso) => cursosConClase.has(curso.id) && byGrade(curso));
-    return ordenar(propios);
-  }, [catalog.cursos, filteredHorarios, selectedGrado, selectedProfesorId, session?.rol]);
+  const cursosOfGrado = useMemo(
+    () =>
+      availableCursos.filter(
+        (curso) => !selectedGrado || String(parseCursoName(curso.nombre).grado) === selectedGrado
+      ),
+    [availableCursos, selectedGrado]
+  );
 
-  const bloquesPorCurso = useMemo(() => {
-    const map = new Map<number, number>();
-    for (const item of filteredHorarios) {
-      map.set(item.curso_id, (map.get(item.curso_id) ?? 0) + 1);
-    }
-    return map;
-  }, [filteredHorarios]);
+  const cursoOptions = useMemo(
+    () => cursosOfGrado.map((curso) => ({ value: String(curso.id), label: curso.nombre })),
+    [cursosOfGrado]
+  );
 
   const selectedCurso = useMemo(
-    () => visibleCursos.find((curso) => String(curso.id) === selectedCursoId) ?? null,
-    [selectedCursoId, visibleCursos]
+    () => availableCursos.find((curso) => String(curso.id) === selectedCursoId) ?? null,
+    [selectedCursoId, availableCursos]
   );
+
+  // Profesores que dictan en el curso seleccionado (opcion "Todos" incluida).
+  const profesorOptions = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const item of horarios) {
+      if (String(item.curso_id) !== selectedCursoId) continue;
+      map.set(item.profesor_id, getProfesorNombre(item));
+    }
+    const lista = Array.from(map.entries())
+      .map(([id, nombre]) => ({ value: String(id), label: nombre }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+    return [{ value: '', label: 'Todos los profesores' }, ...lista];
+  }, [horarios, selectedCursoId]);
 
   const cursoHorarios = useMemo(
-    () => horarios.filter((item) => String(item.curso_id) === selectedCursoId),
-    [horarios, selectedCursoId]
+    () =>
+      horarios.filter(
+        (item) =>
+          String(item.curso_id) === selectedCursoId &&
+          (!selectedProfesorId || String(item.profesor_id) === selectedProfesorId)
+      ),
+    [horarios, selectedCursoId, selectedProfesorId]
   );
 
+  // Mantiene los selectores coherentes: grado por defecto y curso valido.
+  useEffect(() => {
+    if (!selectedGrado && gradeOptions.length > 0) {
+      setSelectedGrado(gradeOptions[0].value);
+    }
+  }, [gradeOptions, selectedGrado]);
+
+  useEffect(() => {
+    if (cursosOfGrado.length === 0) {
+      if (selectedCursoId) setSelectedCursoId('');
+      return;
+    }
+    if (!cursosOfGrado.some((curso) => String(curso.id) === selectedCursoId)) {
+      setSelectedCursoId(String(cursosOfGrado[0].id));
+    }
+  }, [cursosOfGrado, selectedCursoId]);
+
+  // Si el profesor seleccionado ya no dicta en el curso actual, vuelve a "Todos".
+  useEffect(() => {
+    if (selectedProfesorId && !profesorOptions.some((option) => option.value === selectedProfesorId)) {
+      setSelectedProfesorId('');
+    }
+  }, [profesorOptions, selectedProfesorId]);
+
+  const selectedProfesorNombre = useMemo(
+    () => profesorOptions.find((option) => option.value === selectedProfesorId)?.label ?? 'Todos los profesores',
+    [profesorOptions, selectedProfesorId]
+  );
+
+  // Modo "Horarios de profesores": opciones y horario completo del docente.
+  const profesorFullOptions = useMemo(
+    () => catalog.profesores.map((item) => ({ value: String(item.id), label: item.nombre })),
+    [catalog.profesores]
+  );
+
+  const selectedProfesorFull = useMemo(
+    () => catalog.profesores.find((item) => String(item.id) === profesorFullId) ?? null,
+    [catalog.profesores, profesorFullId]
+  );
+
+  const profesorFullHorarios = useMemo(
+    () => (profesorFullId ? horarios.filter((item) => String(item.profesor_id) === profesorFullId) : []),
+    [horarios, profesorFullId]
+  );
+
+  // Fuente del horario que se muestra/imprime segun el modo activo.
+  const tableHorarios = enModoProfesores ? profesorFullHorarios : cursoHorarios;
+
   const stats = useMemo(() => {
-    const docentes = new Set(cursoHorarios.map((item) => item.profesor_id)).size;
-    const asignaturas = new Set(cursoHorarios.map((item) => item.asignatura_id)).size;
-    const dias = new Set(cursoHorarios.map((item) => item.dia_semana)).size;
+    const docentes = new Set(tableHorarios.map((item) => item.profesor_id)).size;
+    const asignaturas = new Set(tableHorarios.map((item) => item.asignatura_id)).size;
+    const cursos = new Set(tableHorarios.map((item) => item.curso_id)).size;
+    const dias = new Set(tableHorarios.map((item) => item.dia_semana)).size;
     return {
-      bloques: cursoHorarios.length,
+      bloques: tableHorarios.length,
       asignaturas,
       docentes,
+      cursos,
       dias,
     };
-  }, [cursoHorarios]);
+  }, [tableHorarios]);
 
   const timeSlots = useMemo(() => {
     const slots = new Map<string, TimeSlot>();
 
-    for (const item of cursoHorarios) {
+    for (const item of tableHorarios) {
       const key = `${item.hora_inicio}-${item.hora_fin}`;
       if (!slots.has(key)) {
         slots.set(key, {
@@ -257,12 +318,12 @@ export default function HorariosScreen() {
     return Array.from(slots.values()).sort(
       (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end)
     );
-  }, [cursoHorarios]);
+  }, [tableHorarios]);
 
   const scheduleRows = useMemo<ScheduleRow[]>(() => {
     const byCell = new Map<string, Horario>();
 
-    for (const item of cursoHorarios) {
+    for (const item of tableHorarios) {
       byCell.set(`${item.dia_semana}-${item.hora_inicio}-${item.hora_fin}`, item);
     }
 
@@ -273,7 +334,7 @@ export default function HorariosScreen() {
         horario: byCell.get(`${dia.value}-${slot.start}-${slot.end}`) ?? null,
       })),
     }));
-  }, [cursoHorarios, timeSlots]);
+  }, [tableHorarios, timeSlots]);
 
   const salonIdForCurso = useCallback(
     (cursoNombre: string | undefined) => {
@@ -291,7 +352,7 @@ export default function HorariosScreen() {
     setSaveError('');
     setForm({
       ...emptyForm,
-      cursoId: selectedCursoId || String(visibleCursos[0]?.id ?? catalog.cursos[0]?.id ?? ''),
+      cursoId: selectedCursoId || String(availableCursos[0]?.id ?? catalog.cursos[0]?.id ?? ''),
       profesorId: String(catalog.profesores[0]?.id ?? ''),
       asignaturaId: String(catalog.asignaturas[0]?.id ?? ''),
       salonId: salonIdForCurso(selectedCurso?.nombre),
@@ -450,72 +511,19 @@ export default function HorariosScreen() {
     });
   };
 
-  const handleGenerate = () => {
-    setConfirmState({
-      title: 'Generar horarios',
-      message: 'Esto limpiara los horarios actuales y generara horarios de prueba para los 33 cursos.',
-      confirmText: 'Generar',
-      onConfirm: async () => {
-        setGeneratorLoading(true);
-        try {
-          const res = await apiFetch<{ validation: ConflictValidation }>('/api/horarios/generar', {
-            method: 'POST',
-            body: { limpiar: true },
-          });
-          setValidation(res.data?.validation ?? null);
-          await loadData();
-          Alert.alert('Listo', res.message ?? 'Horarios generados correctamente.');
-        } catch (err) {
-          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudieron generar los horarios.');
-        } finally {
-          setGeneratorLoading(false);
-        }
-      },
-    });
-  };
-
-  const handleValidate = async () => {
-    setGeneratorLoading(true);
-    try {
-      const res = await apiFetch<ConflictValidation>('/api/horarios/conflictos');
-      setValidation(res.data ?? null);
-      Alert.alert('Verificacion', res.message ?? 'Verificacion completada.');
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo verificar el horario.');
-    } finally {
-      setGeneratorLoading(false);
-    }
-  };
-
-  const handleClearGenerated = () => {
-    setConfirmState({
-      title: 'Limpiar horarios',
-      message: 'Se eliminaran los bloques de horario. Se conservan cursos, salones, areas, asignaturas y profesores.',
-      confirmText: 'Limpiar',
-      onConfirm: async () => {
-        setGeneratorLoading(true);
-        try {
-          await apiFetch('/api/horarios/generados', { method: 'DELETE' });
-          setValidation(null);
-          setSelectedCursoId('');
-          await loadData();
-        } catch (err) {
-          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudieron limpiar los horarios.');
-        } finally {
-          setGeneratorLoading(false);
-        }
-      },
-    });
-  };
-
   const printHorario = () => {
-    if (!selectedCurso) {
-      Alert.alert('Horario no disponible', 'Selecciona un curso para imprimir su horario.');
+    const titulo = enModoProfesores ? selectedProfesorFull?.nombre : selectedCurso?.nombre;
+
+    if (!titulo) {
+      Alert.alert(
+        'Horario no disponible',
+        enModoProfesores ? 'Selecciona un profesor para imprimir su horario.' : 'Selecciona un curso para imprimir su horario.'
+      );
       return;
     }
 
-    if (cursoHorarios.length === 0) {
-      Alert.alert('Horario vacío', 'No hay bloques registrados para este curso.');
+    if (tableHorarios.length === 0) {
+      Alert.alert('Horario vacío', 'No hay bloques registrados para esta seleccion.');
       return;
     }
 
@@ -546,7 +554,11 @@ export default function HorariosScreen() {
       }
 
       doc.open();
-      doc.write(buildHorarioHtml(selectedCurso.nombre, cursoHorarios));
+      doc.write(
+        enModoProfesores
+          ? buildHorarioHtml(titulo, tableHorarios, 'profesor')
+          : buildHorarioHtml(titulo, tableHorarios, 'curso', selectedProfesorNombre)
+      );
       doc.close();
 
       const printFrame = () => {
@@ -563,9 +575,25 @@ export default function HorariosScreen() {
     }
   };
 
-  const heroSubtitle = selectedCurso
-    ? `Horario semanal del curso ${selectedCurso.nombre} por horas, asignaturas y docentes.`
-    : 'Selecciona un curso para revisar su horario semanal de clases.';
+  const heroSubtitle = enMenuAdmin
+    ? 'Elige que tipo de horario quieres consultar.'
+    : enModoProfesores
+      ? selectedProfesorFull
+        ? `Horario completo del docente ${selectedProfesorFull.nombre}.`
+        : 'Selecciona un profesor para ver su horario completo.'
+      : selectedCurso
+        ? `Horario semanal del curso ${selectedCurso.nombre} por horas, asignaturas y docentes.`
+        : 'Selecciona un curso para revisar su horario semanal de clases.';
+
+  const moduleTitle = enMenuAdmin
+    ? 'Horarios'
+    : enModoProfesores
+      ? 'Horarios de profesores'
+      : selectedCurso
+        ? `Horario - ${selectedCurso.nombre}`
+        : isAdmin
+          ? 'Horarios de estudiantes'
+          : 'Horarios';
 
   return (
     <ScreenShell contentStyle={styles.shellContent}>
@@ -590,15 +618,11 @@ export default function HorariosScreen() {
         </View>
       </View>
 
-      {selectedCurso ? (
-        <ModuleHeader
-          title={`Horario - ${selectedCurso.nombre}`}
-          onAdd={canManage ? () => openCreate() : undefined}
-          addLabel="+ Bloque"
-        />
-      ) : (
-        <ModuleHeader title="Cursos" />
-      )}
+      <ModuleHeader
+        title={moduleTitle}
+        onAdd={canManage && !enMenuAdmin && !enModoProfesores && selectedCurso ? () => openCreate() : undefined}
+        addLabel="+ Bloque"
+      />
 
       {loading ? (
         <SkeletonList />
@@ -622,81 +646,162 @@ export default function HorariosScreen() {
             />
           }
           contentContainerStyle={styles.page}>
-          <ScheduleTools
-            canGenerate={session?.rol === 'administrador'}
-            loading={generatorLoading}
-            validation={validation}
-            selectedGrado={selectedGrado}
-            selectedProfesorId={selectedProfesorId}
-            profesores={catalog.profesores}
-            onGenerate={handleGenerate}
-            onValidate={handleValidate}
-            onClear={handleClearGenerated}
-            onChangeGrado={(grado) => {
-              setSelectedGrado(grado);
-              setSelectedCursoId('');
-            }}
-            onChangeProfesor={(profesorId) => {
-              setSelectedProfesorId(profesorId);
-              setSelectedCursoId('');
-            }}
-          />
-
-          {!selectedCurso ? (
-            <CursoList
-              cursos={visibleCursos}
-              bloquesPorCurso={bloquesPorCurso}
-              onSelect={(curso) => setSelectedCursoId(String(curso.id))}
-            />
+          {enMenuAdmin ? (
+            <View style={styles.menuGrid}>
+              <HorarioModeCard
+                title="Horarios de estudiantes"
+                description="Consulta por grado, curso y profesor el horario de cada salon."
+                onPress={() => setAdminVista('estudiantes')}
+              />
+              <HorarioModeCard
+                title="Horarios de profesores"
+                description="Selecciona un docente y revisa su horario completo de la semana."
+                onPress={() => setAdminVista('profesores')}
+              />
+            </View>
           ) : (
             <>
-              <Pressable
-                onPress={() => setSelectedCursoId('')}
-                style={[styles.backButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
-                <ChevronLeftIcon width={16} height={16} color={theme.text} />
-                <ThemedText style={{ color: theme.text }}>Todos los cursos</ThemedText>
-              </Pressable>
-
-              <CursoSummary curso={selectedCurso} bloques={stats.bloques} />
-              <View style={styles.printRow}>
+              {isAdmin ? (
                 <Pressable
-                  disabled={printing || cursoHorarios.length === 0}
-                  onPress={printHorario}
-                  style={[
-                    styles.printButton,
-                    {
-                      backgroundColor: theme.primary,
-                      opacity: printing || cursoHorarios.length === 0 ? 0.6 : 1,
-                    },
-                  ]}>
-                  {printing ? (
-                    <ActivityIndicator color={theme.primaryText} />
-                  ) : (
-                    <ThemedText style={{ color: theme.primaryText }}>Imprimir horario</ThemedText>
-                  )}
+                  onPress={() => {
+                    setAdminVista('');
+                    setProfesorFullId('');
+                  }}
+                  style={[styles.backButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+                  <ThemedText style={{ color: theme.text }}>Volver</ThemedText>
                 </Pressable>
-              </View>
+              ) : null}
 
-              <View style={styles.statsGrid}>
-                <StatCard label="Bloques" value={String(stats.bloques)} />
-                <StatCard label="Asignaturas" value={String(stats.asignaturas)} />
-                <StatCard label="Docentes" value={String(stats.docentes)} />
-                <StatCard label="Dias" value={String(stats.dias)} />
-              </View>
+              {enModoProfesores ? (
+                <>
+                  <ThemedView type="backgroundElement" style={[styles.filtersCard, { borderColor: theme.border }]}>
+                    <SelectField
+                      label="Profesor"
+                      value={profesorFullId}
+                      options={profesorFullOptions}
+                      placeholder="Selecciona un profesor"
+                      onSelect={setProfesorFullId}
+                    />
+                  </ThemedView>
 
-              <WeeklyScheduleTable
-                canManage={canManage}
-                rows={scheduleRows}
-                onCreate={(dia, slot) =>
-                  openCreate({
-                    cursoId: selectedCursoId,
-                    salonId: salonIdForCurso(selectedCurso.nombre),
-                    dias: [{ dia, horaInicio: slot.start, horaFin: slot.end }],
-                  })
-                }
-                onDelete={handleDelete}
-                onEdit={openEdit}
-              />
+                  {!selectedProfesorFull ? (
+                    <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+                      <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                        Selecciona un profesor para ver su horario completo.
+                      </ThemedText>
+                    </ThemedView>
+                  ) : (
+                    <>
+                      <ProfesorSummary nombre={selectedProfesorFull.nombre} bloques={stats.bloques} cursos={stats.cursos} />
+                      <View style={styles.printRow}>
+                        <Pressable
+                          disabled={printing || tableHorarios.length === 0}
+                          onPress={printHorario}
+                          style={[
+                            styles.printButton,
+                            { backgroundColor: theme.primary, opacity: printing || tableHorarios.length === 0 ? 0.6 : 1 },
+                          ]}>
+                          {printing ? (
+                            <ActivityIndicator color={theme.primaryText} />
+                          ) : (
+                            <ThemedText style={{ color: theme.primaryText }}>Imprimir horario</ThemedText>
+                          )}
+                        </Pressable>
+                      </View>
+
+                      <View style={styles.statsGrid}>
+                        <StatCard label="Bloques" value={String(stats.bloques)} />
+                        <StatCard label="Asignaturas" value={String(stats.asignaturas)} />
+                        <StatCard label="Cursos" value={String(stats.cursos)} />
+                        <StatCard label="Dias" value={String(stats.dias)} />
+                      </View>
+
+                      <WeeklyScheduleTable canManage={false} showCurso rows={scheduleRows} />
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <ThemedView type="backgroundElement" style={[styles.filtersCard, { borderColor: theme.border }]}>
+                    <SelectField
+                      label="Grado"
+                      value={selectedGrado}
+                      options={gradeOptions}
+                      placeholder="Selecciona un grado"
+                      onSelect={(value) => {
+                        setSelectedGrado(value);
+                        setSelectedCursoId('');
+                        setSelectedProfesorId('');
+                      }}
+                    />
+                    <SelectField
+                      label="Curso"
+                      value={selectedCursoId}
+                      options={cursoOptions}
+                      placeholder="Selecciona un curso"
+                      onSelect={(value) => {
+                        setSelectedCursoId(value);
+                        setSelectedProfesorId('');
+                      }}
+                    />
+                    <SelectField
+                      label="Profesor"
+                      value={selectedProfesorId}
+                      options={profesorOptions}
+                      placeholder="Todos los profesores"
+                      onSelect={setSelectedProfesorId}
+                    />
+                  </ThemedView>
+
+                  {!selectedCurso ? (
+                    <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+                      <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                        Selecciona grado y curso para ver el horario.
+                      </ThemedText>
+                    </ThemedView>
+                  ) : (
+                    <>
+                      <CursoSummary curso={selectedCurso} bloques={stats.bloques} profesor={selectedProfesorNombre} />
+                      <View style={styles.printRow}>
+                        <Pressable
+                          disabled={printing || tableHorarios.length === 0}
+                          onPress={printHorario}
+                          style={[
+                            styles.printButton,
+                            { backgroundColor: theme.primary, opacity: printing || tableHorarios.length === 0 ? 0.6 : 1 },
+                          ]}>
+                          {printing ? (
+                            <ActivityIndicator color={theme.primaryText} />
+                          ) : (
+                            <ThemedText style={{ color: theme.primaryText }}>Imprimir horario</ThemedText>
+                          )}
+                        </Pressable>
+                      </View>
+
+                      <View style={styles.statsGrid}>
+                        <StatCard label="Bloques" value={String(stats.bloques)} />
+                        <StatCard label="Asignaturas" value={String(stats.asignaturas)} />
+                        <StatCard label="Docentes" value={String(stats.docentes)} />
+                        <StatCard label="Dias" value={String(stats.dias)} />
+                      </View>
+
+                      <WeeklyScheduleTable
+                        canManage={canManage}
+                        rows={scheduleRows}
+                        onCreate={(dia, slot) =>
+                          openCreate({
+                            cursoId: selectedCursoId,
+                            salonId: salonIdForCurso(selectedCurso.nombre),
+                            dias: [{ dia, horaInicio: slot.start, horaFin: slot.end }],
+                          })
+                        }
+                        onDelete={handleDelete}
+                        onEdit={openEdit}
+                      />
+                    </>
+                  )}
+                </>
+              )}
             </>
           )}
         </ScrollView>
@@ -814,155 +919,70 @@ export default function HorariosScreen() {
   );
 }
 
-function ScheduleTools({
-  canGenerate,
-  loading,
-  validation,
-  selectedGrado,
-  selectedProfesorId,
-  profesores,
-  onGenerate,
-  onValidate,
-  onClear,
-  onChangeGrado,
-  onChangeProfesor,
-}: {
-  canGenerate: boolean;
-  loading: boolean;
-  validation: ConflictValidation | null;
-  selectedGrado: string;
-  selectedProfesorId: string;
-  profesores: { id: number; nombre: string }[];
-  onGenerate: () => void;
-  onValidate: () => void;
-  onClear: () => void;
-  onChangeGrado: (grado: string) => void;
-  onChangeProfesor: (profesorId: string) => void;
-}) {
-  const theme = useTheme();
-  const gradeOptions = [
-    { value: '', label: 'Todos' },
-    ...Array.from({ length: 11 }, (_, index) => ({
-      value: String(index + 1),
-      label: `${index + 1}`,
-    })),
-  ];
-  const teacherOptions = [
-    { value: '', label: 'Todos' },
-    ...profesores.map((item) => ({ value: String(item.id), label: item.nombre })),
-  ];
-  const previewConflicts = validation?.conflicts.slice(0, 4) ?? [];
-
-  return (
-    <ThemedView type="backgroundElement" style={[styles.toolsCard, { borderColor: theme.border }]}>
-      <View style={styles.toolsActions}>
-        {canGenerate ? (
-          <>
-            <Pressable
-              disabled={loading}
-              onPress={onGenerate}
-              style={[styles.toolButton, { backgroundColor: theme.primary, opacity: loading ? 0.65 : 1 }]}>
-              {loading ? (
-                <ActivityIndicator color={theme.primaryText} />
-              ) : (
-                <ThemedText style={{ color: theme.primaryText }}>Generar</ThemedText>
-              )}
-            </Pressable>
-            <Pressable
-              disabled={loading}
-              onPress={onClear}
-              style={[styles.toolButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border, borderWidth: 1 }]}>
-              <ThemedText style={{ color: theme.text }}>Limpiar</ThemedText>
-            </Pressable>
-          </>
-        ) : null}
-        <Pressable
-          disabled={loading}
-          onPress={onValidate}
-          style={[styles.toolButton, { backgroundColor: theme.surfaceMuted, borderColor: theme.border, borderWidth: 1 }]}>
-          <ThemedText style={{ color: theme.text }}>Verificar</ThemedText>
-        </Pressable>
-      </View>
-
-      <View style={styles.filtersGrid}>
-        <OptionChips label="Grado" options={gradeOptions} value={selectedGrado} onChange={onChangeGrado} />
-        <OptionChips label="Profesor" options={teacherOptions} value={selectedProfesorId} onChange={onChangeProfesor} />
-      </View>
-
-      {validation ? (
-        <View
-          style={[
-            styles.validationBox,
-            {
-              backgroundColor: validation.valid ? `${theme.accent}16` : `${theme.warning}18`,
-              borderColor: validation.valid ? theme.accent : theme.warning,
-            },
-          ]}>
-          <ThemedText style={[styles.validationTitle, { color: theme.text }]}>
-            {validation.valid
-              ? `Horario valido: ${validation.resumen.horarios} bloques sin conflictos.`
-              : `${validation.resumen.conflictos} conflicto(s) encontrados.`}
-          </ThemedText>
-          {previewConflicts.map((item, index) => (
-            <ThemedText key={`${item.type}-${index}`} type="small" style={{ color: theme.textSecondary }}>
-              {item.message}
-            </ThemedText>
-          ))}
-        </View>
-      ) : null}
-    </ThemedView>
-  );
-}
-
-function CursoList({
-  cursos,
-  bloquesPorCurso,
+function SelectField({
+  label,
+  value,
+  options,
+  placeholder,
   onSelect,
 }: {
-  cursos: CursoCatalog[];
-  bloquesPorCurso: Map<number, number>;
-  onSelect: (curso: CursoCatalog) => void;
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+  onSelect: (value: string) => void;
 }) {
   const theme = useTheme();
-
-  if (cursos.length === 0) {
-    return (
-      <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
-        <ThemedText style={{ color: theme.textSecondary }}>No hay cursos disponibles.</ThemedText>
-      </ThemedView>
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value);
 
   return (
-    <View style={styles.cursoGrid}>
-      {cursos.map((curso) => {
-        const bloques = bloquesPorCurso.get(curso.id) ?? 0;
-        return (
-          <Pressable
-            key={curso.id}
-            onPress={() => onSelect(curso)}
-            style={[styles.cursoCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-            <View style={[styles.cursoIcon, { backgroundColor: `${theme.primary}18` }]}>
-              <AcademicCapIcon width={20} height={20} color={theme.primary} />
-            </View>
-            <View style={styles.cursoBody}>
-              <ThemedText style={[styles.cursoName, { color: theme.text }]}>{curso.nombre}</ThemedText>
-              <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
-                {curso.nivel ?? 'Curso'}
-              </ThemedText>
-              <ThemedText type="small" style={{ color: theme.primary }}>
-                {bloques} bloque{bloques === 1 ? '' : 's'}
-              </ThemedText>
-            </View>
-            <ChevronRightIcon width={18} height={18} color={theme.textSecondary} />
-          </Pressable>
-        );
-      })}
+    <View style={styles.field}>
+      <ThemedText type="small" style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+        {label}
+      </ThemedText>
+      <Pressable
+        onPress={() => setOpen((current) => !current)}
+        style={[styles.fieldInput, styles.selectTrigger, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+        <ThemedText style={{ color: selected ? theme.text : theme.textSecondary, flex: 1 }} numberOfLines={1}>
+          {selected?.label ?? placeholder ?? 'Seleccionar...'}
+        </ThemedText>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          v
+        </ThemedText>
+      </Pressable>
+      {open ? (
+        <ThemedView type="backgroundElement" style={[styles.dropdown, { borderColor: theme.border }]}>
+          <ScrollView style={{ maxHeight: 240 }} nestedScrollEnabled>
+            {options.length === 0 ? (
+              <View style={styles.dropdownItem}>
+                <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                  Sin opciones
+                </ThemedText>
+              </View>
+            ) : (
+              options.map((option) => (
+                <Pressable
+                  key={option.value}
+                  onPress={() => {
+                    onSelect(option.value);
+                    setOpen(false);
+                  }}
+                  style={[styles.dropdownItem, option.value === value && { backgroundColor: `${theme.primary}22` }]}>
+                  <ThemedText type="small" style={{ color: theme.text }}>
+                    {option.label}
+                  </ThemedText>
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+        </ThemedView>
+      ) : null}
     </View>
   );
 }
 
-function CursoSummary({ curso, bloques }: { curso: CursoCatalog; bloques: number }) {
+function CursoSummary({ curso, bloques, profesor }: { curso: CursoCatalog; bloques: number; profesor: string }) {
   const theme = useTheme();
 
   return (
@@ -972,7 +992,7 @@ function CursoSummary({ curso, bloques }: { curso: CursoCatalog; bloques: number
       </View>
       <View style={styles.roomCopy}>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          Curso seleccionado
+          {profesor}
         </ThemedText>
         <ThemedText style={[styles.roomName, { color: theme.text }]}>{curso.nombre}</ThemedText>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -983,18 +1003,61 @@ function CursoSummary({ curso, bloques }: { curso: CursoCatalog; bloques: number
   );
 }
 
+function ProfesorSummary({ nombre, bloques, cursos }: { nombre: string; bloques: number; cursos: number }) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.roomSummary, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}20` }]}>
+        <AcademicCapIcon width={18} height={18} color={theme.primary} />
+      </View>
+      <View style={styles.roomCopy}>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          Docente seleccionado
+        </ThemedText>
+        <ThemedText style={[styles.roomName, { color: theme.text }]}>{nombre}</ThemedText>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {bloques} bloque{bloques === 1 ? '' : 's'} - {cursos} curso{cursos === 1 ? '' : 's'}
+        </ThemedText>
+      </View>
+    </View>
+  );
+}
+
+function HorarioModeCard({ title, description, onPress }: { title: string; description: string; onPress: () => void }) {
+  const theme = useTheme();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.modeCard, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={[styles.modeIcon, { backgroundColor: `${theme.primary}18` }]}>
+        <CalendarDaysIcon width={22} height={22} color={theme.primary} />
+      </View>
+      <View style={styles.modeBody}>
+        <ThemedText style={[styles.modeTitle, { color: theme.text }]}>{title}</ThemedText>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {description}
+        </ThemedText>
+      </View>
+    </Pressable>
+  );
+}
+
 function WeeklyScheduleTable({
   rows,
   canManage,
+  showCurso = false,
   onCreate,
   onDelete,
   onEdit,
 }: {
   rows: ScheduleRow[];
   canManage: boolean;
-  onCreate: (dia: string, slot: TimeSlot) => void;
-  onDelete: (item: Horario) => void;
-  onEdit: (item: Horario) => void;
+  showCurso?: boolean;
+  onCreate?: (dia: string, slot: TimeSlot) => void;
+  onDelete?: (item: Horario) => void;
+  onEdit?: (item: Horario) => void;
 }) {
   const theme = useTheme();
   const tableWidth = COL.hora + DIAS.length * COL.dia;
@@ -1003,7 +1066,7 @@ function WeeklyScheduleTable({
     return (
       <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
         <ThemedText style={{ color: theme.textSecondary }}>
-          No hay bloques registrados para este curso.
+          No hay bloques registrados para esta seleccion.
         </ThemedText>
       </ThemedView>
     );
@@ -1038,6 +1101,7 @@ function WeeklyScheduleTable({
                 <ScheduleCell
                   key={`${row.slot.key}-${cell.dia}`}
                   canManage={canManage}
+                  showCurso={showCurso}
                   dia={cell.dia}
                   horario={cell.horario}
                   slot={row.slot}
@@ -1056,6 +1120,7 @@ function WeeklyScheduleTable({
 
 function ScheduleCell({
   canManage,
+  showCurso = false,
   dia,
   horario,
   slot,
@@ -1064,12 +1129,13 @@ function ScheduleCell({
   onEdit,
 }: {
   canManage: boolean;
+  showCurso?: boolean;
   dia: string;
   horario: Horario | null;
   slot: TimeSlot;
-  onCreate: (dia: string, slot: TimeSlot) => void;
-  onDelete: (item: Horario) => void;
-  onEdit: (item: Horario) => void;
+  onCreate?: (dia: string, slot: TimeSlot) => void;
+  onDelete?: (item: Horario) => void;
+  onEdit?: (item: Horario) => void;
 }) {
   const theme = useTheme();
   const disabled = !canManage;
@@ -1079,24 +1145,26 @@ function ScheduleCell({
       disabled={disabled}
       onPress={() => {
         if (horario) {
-          onEdit(horario);
+          onEdit?.(horario);
         } else {
-          onCreate(dia, slot);
+          onCreate?.(dia, slot);
         }
       }}
-      onLongPress={() => horario && onDelete(horario)}
+      onLongPress={() => horario && onDelete?.(horario)}
       style={[styles.dayCell, { borderRightColor: theme.border }]}>
       {horario ? (
         <View style={[styles.blockContent, { backgroundColor: `${theme.primary}18`, borderColor: `${theme.primary}55` }]}>
           <ThemedText style={[styles.subjectText, { color: theme.text }]} numberOfLines={2}>
             {horario.asignatura_nombre}
           </ThemedText>
-          <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
-            {horario.area_nombre ?? 'Area academica'}
-          </ThemedText>
           <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={2}>
-            {getProfesorNombre(horario)}
+            {showCurso ? horario.curso_nombre : (horario.area_nombre ?? 'Area academica')}
           </ThemedText>
+          {showCurso ? null : (
+            <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={2}>
+              {getProfesorNombre(horario)}
+            </ThemedText>
+          )}
           <ThemedText type="small" style={[styles.courseText, { color: theme.primary }]} numberOfLines={1}>
             {horario.salon_nombre}
           </ThemedText>
@@ -1200,7 +1268,14 @@ function getProfesorNombre(item: Horario) {
   return `${item.profesor_nombres} ${item.profesor_apellidos}`.trim();
 }
 
-function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
+function buildHorarioHtml(
+  titulo: string,
+  horarios: Horario[],
+  mode: 'curso' | 'profesor' = 'curso',
+  profesorLabel = 'Todos los profesores'
+) {
+  const esProfesor = mode === 'profesor';
+  const totalCursos = new Set(horarios.map((item) => item.curso_id)).size;
   const days = DIAS;
   const palette = ['#dbeafe', '#fef3c7', '#fde2e3', '#dcfce7', '#ede9fe', '#ffe4d6', '#d8f5ff', '#f5f3ff'];
   const subjectColor = new Map<string, string>();
@@ -1240,8 +1315,8 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
               return `
                 <div class="cell-block" style="background: ${color}; border-color: ${color};">
                   <strong>${escapeHtml(item.asignatura_nombre)}</strong>
-                  <span>${escapeHtml(item.area_nombre ?? '')}</span>
-                  <span>${escapeHtml(getProfesorNombre(item))}</span>
+                  <span>${escapeHtml(esProfesor ? item.curso_nombre : (item.area_nombre ?? ''))}</span>
+                  ${esProfesor ? '' : `<span>${escapeHtml(getProfesorNombre(item))}</span>`}
                   <span>${escapeHtml(item.salon_nombre)}</span>
                 </div>
               `;
@@ -1262,7 +1337,7 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
   const uniqueSubjects = Array.from(
     new Map(
       horarios.map((item) => [
-        item.asignatura_nombre,
+        esProfesor ? `${item.asignatura_nombre}-${item.curso_id}` : item.asignatura_nombre,
         item,
       ])
     ).values()
@@ -1271,11 +1346,13 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
   const detailRows = uniqueSubjects
     .map((item) => {
       const color = getSubjectColor(item.asignatura_nombre);
+      const segundaColumna = esProfesor ? item.curso_nombre : (item.area_nombre ?? '');
+      const terceraColumna = esProfesor ? '' : `<td>${escapeHtml(getProfesorNombre(item))}</td>`;
       return `
         <tr>
           <td><span class="subject-pill" style="background:${color};">${escapeHtml(item.asignatura_nombre)}</span></td>
-          <td>${escapeHtml(item.area_nombre ?? '')}</td>
-          <td>${escapeHtml(getProfesorNombre(item))}</td>
+          <td>${escapeHtml(segundaColumna)}</td>
+          ${terceraColumna}
           <td>${escapeHtml(item.salon_nombre)}</td>
         </tr>
       `;
@@ -1286,7 +1363,7 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Horario - ${escapeHtml(cursoNombre)}</title>
+        <title>Horario - ${escapeHtml(titulo)}</title>
         <style>
           * { box-sizing: border-box; }
           body {
@@ -1432,13 +1509,13 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
           <section class="institution">
             <h1>${escapeHtml(institution.name)}</h1>
             <p>${escapeHtml(institution.appName)} - ${escapeHtml(institution.location)}</p>
-            <p>Horario semanal - ${escapeHtml(cursoNombre)}</p>
+            <p>${esProfesor ? 'Horario del docente' : 'Horario semanal'} - ${escapeHtml(titulo)}</p>
           </section>
 
           <section>
             <div class="info-grid">
-              <div class="info-item"><span class="info-label">Curso</span><span class="info-value">${escapeHtml(cursoNombre)}</span></div>
-              <div class="info-item"><span class="info-label">Registros</span><span class="info-value">${horarios.length}</span></div>
+              <div class="info-item"><span class="info-label">${esProfesor ? 'Docente' : 'Curso'}</span><span class="info-value">${escapeHtml(titulo)}</span></div>
+              <div class="info-item"><span class="info-label">${esProfesor ? 'Cursos' : 'Profesor'}</span><span class="info-value">${esProfesor ? totalCursos : escapeHtml(profesorLabel)}</span></div>
               <div class="info-item"><span class="info-label">Fecha</span><span class="info-value">${escapeHtml(new Date().toLocaleDateString())}</span></div>
             </div>
           </section>
@@ -1464,8 +1541,8 @@ function buildHorarioHtml(cursoNombre: string, horarios: Horario[]) {
               <thead>
                 <tr>
                   <th>Materia</th>
-                  <th>Area</th>
-                  <th>Docente</th>
+                  <th>${esProfesor ? 'Curso' : 'Area'}</th>
+                  ${esProfesor ? '' : '<th>Docente</th>'}
                   <th>Salón</th>
                 </tr>
               </thead>
@@ -1550,6 +1627,25 @@ const styles = StyleSheet.create({
   heroTitle: {},
   heroSubtitle: { lineHeight: 22 },
   page: { gap: Spacing.three, paddingBottom: Spacing.five },
+  menuGrid: { gap: Spacing.two },
+  modeCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  modeIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  modeBody: { flex: 1, minWidth: 0, gap: 4 },
+  modeTitle: { fontSize: 18, fontWeight: '800' },
+  filtersCard: { borderRadius: 8, borderWidth: 1, padding: Spacing.three, gap: Spacing.two },
+  field: { gap: 4 },
+  fieldLabel: { fontWeight: '700', opacity: 0.78 },
+  fieldInput: { minHeight: 44, borderWidth: 1, borderRadius: 8, paddingHorizontal: Spacing.two, justifyContent: 'center' },
+  selectTrigger: { flexDirection: 'row', alignItems: 'center' },
+  dropdown: { borderWidth: 1, borderRadius: 8, marginTop: 2, zIndex: 99 },
+  dropdownItem: { paddingHorizontal: Spacing.two, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' },
   toolsCard: { borderRadius: 8, borderWidth: 1, padding: Spacing.three, gap: Spacing.three },
   toolsActions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   toolButton: {
