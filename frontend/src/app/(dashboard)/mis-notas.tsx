@@ -64,7 +64,7 @@ export default function MisNotasScreen() {
     }
   }, []);
 
-  useEffect(() => { loadMe(); }, [loadMe]);
+  useEffect(() => { void Promise.resolve().then(loadMe); }, [loadMe]);
 
   const loadBoletin = useCallback(async () => {
     if (!me?.estudianteId || !selectedPeriodo) return;
@@ -79,7 +79,7 @@ export default function MisNotasScreen() {
     }
   }, [me, selectedPeriodo]);
 
-  useEffect(() => { loadBoletin(); }, [loadBoletin]);
+  useEffect(() => { void Promise.resolve().then(loadBoletin); }, [loadBoletin]);
 
   if (loading) {
     return (
@@ -123,7 +123,7 @@ export default function MisNotasScreen() {
 
       {/* Selector de período */}
       {periodos.length > 0 && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.periodScroll} contentContainerStyle={styles.chipRow}>
           {periodos.map((p) => (
             <Pressable
               key={p.id}
@@ -138,7 +138,7 @@ export default function MisNotasScreen() {
       )}
 
       {boletin ? (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, styles.contentAfterChips]}>
           {/* Resumen */}
           <View style={styles.metricsRow}>
             <Metric label="Promedio" value={boletin.resumen.promedioGeneral.toFixed(2)} highlight />
@@ -147,8 +147,12 @@ export default function MisNotasScreen() {
             <Metric label="Asistencia" value={`${boletin.resumen.porcentajeAsistencia}%`} />
           </View>
 
-          {/* Tabla de materias */}
-          <ThemedText type="small" style={styles.sectionLabel}>Calificaciones por materia</ThemedText>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="small" style={styles.sectionLabel}>Calificaciones por materia</ThemedText>
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>
+              {boletin.resumen.materiasRegistradas} registradas
+            </ThemedText>
+          </View>
           {boletin.materias.length === 0 ? (
             <ThemedView type="backgroundElement" style={[styles.emptyBox, { borderColor: theme.border }]}>
               <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
@@ -156,29 +160,46 @@ export default function MisNotasScreen() {
               </ThemedText>
             </ThemedView>
           ) : (
-            boletin.materias.map((m, i) => (
-              <ThemedView key={i} type="backgroundElement" style={[styles.materiaCard, { borderColor: theme.border }]}>
-                <View style={{ flex: 1 }}>
-                  <ThemedText style={styles.materiaName}>{m.asignatura}</ThemedText>
-                  <ThemedText type="small" style={{ color: theme.textSecondary }}>Prof. {m.profesor}</ThemedText>
-                  {m.observacion ? (
-                    <ThemedText type="small" style={{ color: theme.textSecondary, fontStyle: 'italic', marginTop: 2 }}>{m.observacion}</ThemedText>
-                  ) : null}
-                </View>
-                <View style={styles.notaWrap}>
-                  <ThemedText style={[styles.notaGrande, { color: desempenoColor(m.desempeno) }]}>
-                    {Number(m.nota).toFixed(1)}
-                  </ThemedText>
-                  <ThemedText type="small" style={{ color: desempenoColor(m.desempeno), fontWeight: '600' }}>
-                    {m.desempeno}
-                  </ThemedText>
-                </View>
-              </ThemedView>
-            ))
+            <ThemedView type="backgroundElement" style={[styles.table, { borderColor: theme.border }]}>
+              {boletin.materias.map((m, i) => {
+                const color = desempenoColor(m.desempeno);
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.materiaRow,
+                      i < boletin.materias.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: 1 },
+                    ]}>
+                    <View style={[styles.scoreDot, { backgroundColor: color }]} />
+                    <View style={styles.materiaInfo}>
+                      <ThemedText style={styles.materiaName} numberOfLines={1}>{m.asignatura}</ThemedText>
+                      <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+                        Prof. {m.profesor}
+                      </ThemedText>
+                      {m.observacion ? (
+                        <ThemedText type="small" style={[styles.observation, { color: theme.textSecondary }]} numberOfLines={2}>
+                          {m.observacion}
+                        </ThemedText>
+                      ) : null}
+                    </View>
+                    <View style={styles.notaWrap}>
+                      <ThemedText style={[styles.notaGrande, { color }]}>
+                        {Number(m.nota).toFixed(1)}
+                      </ThemedText>
+                      <ThemedText type="small" style={[styles.desempenoText, { color }]}>
+                        {m.desempeno}
+                      </ThemedText>
+                    </View>
+                  </View>
+                );
+              })}
+            </ThemedView>
           )}
 
-          {/* Asistencias */}
-          <ThemedText type="small" style={styles.sectionLabel}>Resumen de asistencia</ThemedText>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="small" style={styles.sectionLabel}>Resumen de asistencia</ThemedText>
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>{boletin.asistencia.total} clases</ThemedText>
+          </View>
           <View style={styles.asistRow}>
             <AsistStat label="Presentes" value={boletin.asistencia.presente} color={theme.accent} />
             <AsistStat label="Ausentes" value={boletin.asistencia.ausente} color={theme.danger} />
@@ -220,24 +241,32 @@ function AsistStat({ label, value, color }: { label: string; value: number; colo
 const styles = StyleSheet.create({
   shell: { gap: Spacing.two },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  hero: { borderWidth: 1, borderRadius: 8, padding: Spacing.three, gap: 4 },
+  hero: { borderWidth: 1, borderRadius: 8, padding: Spacing.two, gap: 2 },
   kicker: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  title: { fontSize: 20, fontWeight: '600' },
-  chipRow: { flexDirection: 'row', gap: Spacing.two, paddingVertical: 4 },
-  chip: { paddingHorizontal: Spacing.two, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: '#C0C8D0' },
+  title: { fontSize: 18, fontWeight: '600' },
+  chipRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one, paddingTop: 2, paddingBottom: 0 },
+  periodScroll: { maxHeight: 42, flexGrow: 0 },
+  chip: { minHeight: 38, maxHeight: 38, alignSelf: 'flex-start', alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.two, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: '#C0C8D0' },
   chipText: { fontWeight: '500', fontSize: 12 },
-  content: { gap: Spacing.three, paddingBottom: Spacing.five },
-  metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  metric: { flex: 1, minWidth: 80, padding: Spacing.two, borderRadius: 6, gap: 2 },
-  metricVal: { fontSize: 20, fontWeight: '700' },
+  content: { gap: Spacing.two, paddingBottom: Spacing.five },
+  contentAfterChips: { paddingTop: 0 },
+  metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
+  metric: { flex: 1, minWidth: 80, padding: Spacing.two, borderRadius: 6, gap: 0 },
+  metricVal: { fontSize: 18, fontWeight: '700' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
   sectionLabel: { fontWeight: '600', opacity: 0.7, textTransform: 'uppercase', fontSize: 11 },
-  materiaCard: { borderWidth: 1, borderRadius: 8, padding: Spacing.three, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  table: { borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  materiaRow: { minHeight: 58, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two, flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
+  scoreDot: { width: 8, height: 8, borderRadius: 999 },
+  materiaInfo: { flex: 1, minWidth: 0 },
   materiaName: { fontWeight: '600' },
-  notaWrap: { alignItems: 'center', minWidth: 52 },
-  notaGrande: { fontSize: 22, fontWeight: '700' },
-  asistRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  asistCard: { flex: 1, minWidth: 70, padding: Spacing.two, borderRadius: 6, alignItems: 'center', gap: 2 },
-  asistNum: { fontSize: 20, fontWeight: '700' },
+  observation: { fontStyle: 'italic', marginTop: 1 },
+  notaWrap: { alignItems: 'flex-end', minWidth: 58 },
+  notaGrande: { fontSize: 20, fontWeight: '700' },
+  desempenoText: { fontSize: 11, fontWeight: '600' },
+  asistRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
+  asistCard: { flex: 1, minWidth: 70, padding: Spacing.two, borderRadius: 6, alignItems: 'center', gap: 0 },
+  asistNum: { fontSize: 18, fontWeight: '700' },
   emptyBox: { borderWidth: 1, borderRadius: 8, padding: Spacing.four, alignItems: 'center', justifyContent: 'center' },
   btn: { minHeight: 38, minWidth: 100, borderWidth: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.three },
 });

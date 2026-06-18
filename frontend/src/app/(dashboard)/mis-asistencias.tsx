@@ -66,7 +66,7 @@ export default function MisAsistenciasScreen() {
     }
   }, [filtro]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void Promise.resolve().then(load); }, [load]);
 
   const resumen = asistencias.reduce(
     (acc, a) => { acc[a.estado_asistencia] = (acc[a.estado_asistencia] || 0) + 1; acc.total += 1; return acc; },
@@ -109,11 +109,10 @@ export default function MisAsistenciasScreen() {
         <ThemedText type="small" style={[styles.kicker, { color: theme.accent }]}>Mi historial</ThemedText>
         <ThemedText style={styles.title}>Mis asistencias</ThemedText>
         <ThemedText type="small" style={{ color: theme.textSecondary }}>
-          {session?.nombre} · {me.cursoNombre}
+          {session?.nombre} - {me.cursoNombre}
         </ThemedText>
       </ThemedView>
 
-      {/* Resumen */}
       <View style={styles.metricsRow}>
         <StatBox label="Total" value={resumen.total} />
         <StatBox label="Presentes" value={resumen.presente} color="#8FBF26" />
@@ -122,7 +121,6 @@ export default function MisAsistenciasScreen() {
         <StatBox label="Tardanzas" value={resumen.tardanza} color="#A0A8B2" />
       </View>
 
-      {/* Filtros */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
         {FILTROS.map((f) => (
           <Pressable
@@ -144,29 +142,43 @@ export default function MisAsistenciasScreen() {
         </ThemedView>
       ) : (
         <ScrollView contentContainerStyle={styles.list}>
-          {asistencias.map((a) => (
-            <ThemedView key={a.id} type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-              <View style={[styles.estadoBar, { backgroundColor: estadoColor(a.estado_asistencia) }]} />
-              <View style={{ flex: 1 }}>
-                <View style={styles.cardTop}>
-                  <ThemedText style={styles.asignatura}>{a.asignatura_nombre}</ThemedText>
-                  <View style={[styles.badge, { backgroundColor: `${estadoColor(a.estado_asistencia)}22` }]}>
-                    <ThemedText type="small" style={[styles.badgeText, { color: estadoColor(a.estado_asistencia) }]}>
-                      {a.estado_asistencia}
+          <View style={styles.sectionHeader}>
+            <ThemedText type="small" style={styles.sectionLabel}>Registros recientes</ThemedText>
+            <ThemedText type="small" style={{ color: theme.textSecondary }}>{asistencias.length} resultados</ThemedText>
+          </View>
+          <ThemedView type="backgroundElement" style={[styles.table, { borderColor: theme.border }]}>
+            {asistencias.map((a, index) => {
+              const color = estadoColor(a.estado_asistencia);
+              return (
+                <View
+                  key={a.id}
+                  style={[
+                    styles.row,
+                    index < asistencias.length - 1 && { borderBottomColor: theme.border, borderBottomWidth: 1 },
+                  ]}>
+                  <View style={[styles.estadoBar, { backgroundColor: color }]} />
+                  <View style={styles.rowBody}>
+                    <View style={styles.cardTop}>
+                      <ThemedText style={styles.asignatura} numberOfLines={1}>{a.asignatura_nombre}</ThemedText>
+                      <View style={[styles.badge, { backgroundColor: `${color}22` }]}>
+                        <ThemedText type="small" style={[styles.badgeText, { color }]}>
+                          {a.estado_asistencia}
+                        </ThemedText>
+                      </View>
+                    </View>
+                    <ThemedText type="small" style={{ color: theme.textSecondary }} numberOfLines={1}>
+                      {a.fecha?.slice(0, 10)} - Prof. {a.profesor_nombre}
                     </ThemedText>
+                    {a.observacion ? (
+                      <ThemedText type="small" style={{ color: theme.textSecondary, fontStyle: 'italic', marginTop: 1 }} numberOfLines={2}>
+                        {a.observacion}
+                      </ThemedText>
+                    ) : null}
                   </View>
                 </View>
-                <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                  {a.fecha?.slice(0, 10)} · Prof. {a.profesor_nombre}
-                </ThemedText>
-                {a.observacion ? (
-                  <ThemedText type="small" style={{ color: theme.textSecondary, fontStyle: 'italic', marginTop: 2 }}>
-                    {a.observacion}
-                  </ThemedText>
-                ) : null}
-              </View>
-            </ThemedView>
-          ))}
+              );
+            })}
+          </ThemedView>
         </ScrollView>
       )}
     </ScreenShell>
@@ -186,20 +198,24 @@ function StatBox({ label, value, color }: { label: string; value: number; color?
 const styles = StyleSheet.create({
   shell: { gap: Spacing.two },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two },
-  hero: { borderWidth: 1, borderRadius: 8, padding: Spacing.three, gap: 4 },
+  hero: { borderWidth: 1, borderRadius: 8, padding: Spacing.two, gap: 2 },
   kicker: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
-  title: { fontSize: 20, fontWeight: '600' },
-  metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  statBox: { flex: 1, minWidth: 64, padding: Spacing.two, borderRadius: 6, alignItems: 'center', gap: 2 },
-  statNum: { fontSize: 20, fontWeight: '700' },
-  chipRow: { flexDirection: 'row', gap: Spacing.two, paddingVertical: 4 },
-  chip: { paddingHorizontal: Spacing.two, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: '#C0C8D0' },
+  title: { fontSize: 18, fontWeight: '600' },
+  metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.one },
+  statBox: { flex: 1, minWidth: 64, padding: Spacing.two, borderRadius: 6, alignItems: 'center', gap: 0 },
+  statNum: { fontSize: 18, fontWeight: '700' },
+  chipRow: { flexDirection: 'row', gap: Spacing.one, paddingVertical: 2 },
+  chip: { paddingHorizontal: Spacing.two, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: '#C0C8D0' },
   chipText: { fontWeight: '500', fontSize: 12 },
   list: { gap: Spacing.two, paddingBottom: Spacing.five },
-  card: { borderWidth: 1, borderRadius: 8, flexDirection: 'row', overflow: 'hidden' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
+  sectionLabel: { fontWeight: '600', opacity: 0.7, textTransform: 'uppercase', fontSize: 11 },
+  table: { borderWidth: 1, borderRadius: 8, overflow: 'hidden' },
+  row: { minHeight: 56, flexDirection: 'row' },
   estadoBar: { width: 4 },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  asignatura: { fontWeight: '600', flex: 1 },
+  rowBody: { flex: 1, minWidth: 0, paddingHorizontal: Spacing.two, paddingVertical: Spacing.two },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: Spacing.two },
+  asignatura: { fontWeight: '600', flex: 1, minWidth: 0 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
   badgeText: { fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
   emptyBox: { borderWidth: 1, borderRadius: 8, padding: Spacing.four, alignItems: 'center' },
