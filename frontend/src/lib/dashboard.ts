@@ -67,6 +67,13 @@ export const MODULOS_ADMIN: Modulo[] = [
     ruta: '/(dashboard)/grados',
   },
   {
+    id: 'asignaturas',
+    nombre: 'Asignaturas',
+    descripcion: 'Gestion de materias por area academica',
+    icon: CrudIcons.document,
+    ruta: '/(dashboard)/asignaturas',
+  },
+  {
     id: 'profesores',
     nombre: 'Profesores',
     descripcion: 'Gestion de profesores y docentes',

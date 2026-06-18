@@ -16,6 +16,7 @@ const comunicadoRoutes = require("./routes/comunicadoRoutes");
 const boletinRoutes = require("./routes/boletinRoutes");
 const periodoRoutes = require("./routes/periodoRoutes");
 const notaRoutes = require("./routes/notaRoutes");
+const asignaturaRoutes = require("./routes/asignaturaRoutes");
 const meRoutes = require("./routes/meRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const { authenticate } = require("./middlewares/authMiddleware");
@@ -53,17 +54,6 @@ app.use("/", authRoutes);
 // A partir de aquí todas las rutas /api/* requieren token JWT válido
 app.use("/api", authenticate);
 
-app.get("/api/asignaturas", async (req, res, next) => {
-  try {
-    const [rows] = await pool.query(
-      "SELECT id, nombre, descripcion, estado FROM asignaturas ORDER BY nombre ASC"
-    );
-    res.json({ ok: true, data: rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
 app.use("/", usuarioRoutes);
 app.use("/", estudianteRoutes);
 app.use("/", profesorRoutes);
@@ -79,6 +69,7 @@ app.use("/", comunicadoRoutes);
 app.use("/", boletinRoutes);
 app.use("/", periodoRoutes);
 app.use("/", notaRoutes);
+app.use("/", asignaturaRoutes);
 app.use("/", meRoutes);
 
 app.use(errorHandler);

@@ -21,6 +21,7 @@ import { ErrorState, SkeletonList } from '@/components/crud/FeedbackStates';
 import { FormField } from '@/components/crud/FormField';
 import { ModuleHeader } from '@/components/crud/ModuleHeader';
 import { OptionChips } from '@/components/crud/OptionChips';
+import { SelectField } from '@/components/crud/SelectField';
 import { SearchBar } from '@/components/crud/SearchBar';
 import ConfirmModal from '@/components/ui/ConfirmModal';
 import { ScreenShell } from '@/components/screen-shell';
@@ -602,11 +603,13 @@ export default function UsuariosScreen() {
                         </ThemedText>
                       </ThemedView>
                     ) : (
-                      <OptionChips
+                      <SelectField
                         label="Persona"
+                        searchable
+                        searchPlaceholder="Buscar por nombre o documento"
                         options={personas.map((p) => ({
                           value: String(p.id),
-                          label: `${p.apellidos}, ${p.nombres}`,
+                          label: `${p.apellidos}, ${p.nombres} · ${p.documento}`,
                         }))}
                         value={createForm.personaId}
                         onChange={(personaId) => setCreateForm((f) => ({ ...f, personaId }))}
