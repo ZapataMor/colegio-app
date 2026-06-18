@@ -8,14 +8,43 @@ const getPersonaIdFromRequest = async (req) => {
 
 const getNotasPorCurso = async (req, res, next) => {
   try {
+    if (!["profesor", "administrador"].includes(req.user?.rol)) {
+      return res.status(403).json({ ok: false, message: "No tienes permiso para consultar notas." });
+    }
+
     const personaId = await getPersonaIdFromRequest(req);
+    const cursoId = req.query.cursoId ? Number(req.query.cursoId) : null;
+    const asignaturaId = req.query.asignaturaId ? Number(req.query.asignaturaId) : null;
+    const periodoId = req.query.periodoId ? Number(req.query.periodoId) : null;
+
+    if (req.user?.rol === "administrador" && (!cursoId || !asignaturaId)) {
+      return res.json({
+        ok: true,
+        data: await notaModel.findNotasFinalesPorCurso({ periodoId }),
+      });
+    }
+
+    if (!cursoId || !asignaturaId || !periodoId) {
+      return res.json({ ok: true, data: null });
+    }
+
+    const data = await notaModel.findPorCurso({
+      periodoId,
+      cursoId,
+      asignaturaId,
+      profesorPersonaId: req.user?.rol === "profesor" ? personaId : null,
+    });
+
+    if (!data) {
+      return res.status(req.user?.rol === "profesor" ? 403 : 404).json({
+        ok: false,
+        message: "No hay asignacion activa para el curso y asignatura seleccionados.",
+      });
+    }
 
     return res.json({
       ok: true,
-      data: await notaModel.findPorCurso({
-        periodoId: req.query.periodoId ? Number(req.query.periodoId) : null,
-        profesorPersonaId: req.user?.rol === "profesor" ? personaId : null,
-      }),
+      data,
     });
   } catch (error) {
     return next(error);
@@ -56,6 +85,10 @@ const getNotaById = async (req, res, next) => {
 
 const getNotaCatalog = async (req, res, next) => {
   try {
+    if (!["profesor", "administrador"].includes(req.user?.rol)) {
+      return res.status(403).json({ ok: false, message: "No tienes permiso para consultar el catalogo de notas." });
+    }
+
     const personaId = await getPersonaIdFromRequest(req);
 
     return res.json({
@@ -63,6 +96,138 @@ const getNotaCatalog = async (req, res, next) => {
       data: await notaModel.getCatalog({
         profesorPersonaId: req.user?.rol === "profesor" ? personaId : null,
       }),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const createActividad = async (req, res, next) => {
+  try {
+    if (!["profesor", "administrador"].includes(req.user?.rol)) {
+      return res.status(403).json({ ok: false, message: "No tienes permiso para crear actividades." });
+    }
+
+    const titulo = req.body.titulo?.trim() || req.body.nombre?.trim();
+    const fecha = req.body.fecha || req.body.activityDate;
+    const cursoId = Number(req.body.cursoId);
+    const asignaturaId = Number(req.body.asignaturaId);
+    const periodoId = Number(req.body.periodoId);
+    let profesorId = Number(req.body.profesorId);
+
+    if (!titulo || !fecha || !cursoId || !asignaturaId || !periodoId) {
+      return res.status(400).json({
+        ok: false,
+        message: "titulo, fecha, cursoId, asignaturaId y periodoId son obligatorios.",
+      });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(fecha))) {
+      return res.status(400).json({ ok: false, message: "La fecha debe tener formato YYYY-MM-DD." });
+    }
+
+    const periodoValido = await notaModel.periodoExists(periodoId);
+    if (!periodoValido) {
+      return res.status(400).json({ ok: false, message: "El periodo academico no existe." });
+    }
+
+    if (req.user?.rol === "profesor") {
+      const personaId = await getPersonaIdFromRequest(req);
+      const profesor = personaId ? await notaModel.findProfesorByPersonaId(personaId) : null;
+      if (!profesor) {
+        return res.status(403).json({
+          ok: false,
+          message: "Tu usuario no tiene un perfil de profesor activo asociado.",
+        });
+      }
+      profesorId = profesor.id;
+    } else if (!profesorId) {
+      return res.status(400).json({ ok: false, message: "profesorId es obligatorio para administrador." });
+    }
+
+    const profesorAsignado = await notaModel.profesorTieneClase({ profesorId, cursoId, asignaturaId });
+    if (!profesorAsignado) {
+      return res.status(403).json({
+        ok: false,
+        message: "El profesor seleccionado no tiene asignado ese curso y asignatura.",
+      });
+    }
+
+    const id = await notaModel.createActividad({
+      titulo,
+      fecha,
+      cursoId,
+      asignaturaId,
+      periodoId,
+      profesorId,
+      descripcion: req.body.descripcion?.trim() || null,
+    });
+
+    return res.status(201).json({
+      ok: true,
+      message: "Actividad creada correctamente.",
+      data: await notaModel.findActividadById(id),
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const upsertNotaActividad = async (req, res, next) => {
+  try {
+    if (!["profesor", "administrador"].includes(req.user?.rol)) {
+      return res.status(403).json({ ok: false, message: "No tienes permiso para registrar notas." });
+    }
+
+    const actividadId = Number(req.params.actividadId);
+    const estudianteId = Number(req.body.estudianteId);
+    const notaNum = Number(String(req.body.nota ?? "").replace(",", "."));
+
+    if (!actividadId || !estudianteId || req.body.nota === undefined || req.body.nota === "") {
+      return res.status(400).json({
+        ok: false,
+        message: "actividadId, estudianteId y nota son obligatorios.",
+      });
+    }
+
+    if (isNaN(notaNum) || notaNum < 1 || notaNum > 5) {
+      return res.status(400).json({ ok: false, message: "La nota debe ser un numero entre 1.0 y 5.0." });
+    }
+
+    const actividad = await notaModel.findActividadById(actividadId);
+    if (!actividad) {
+      return res.status(404).json({ ok: false, message: "Actividad no encontrada." });
+    }
+
+    if (req.user?.rol === "profesor") {
+      const personaId = await getPersonaIdFromRequest(req);
+      if (actividad.profesor_persona_id !== personaId) {
+        return res.status(403).json({
+          ok: false,
+          message: "Solo puedes editar notas de actividades creadas para tus asignaciones.",
+        });
+      }
+    }
+
+    const estudianteValido = await notaModel.estudiantePerteneceCurso(estudianteId, actividad.curso_id);
+    if (!estudianteValido) {
+      return res.status(400).json({
+        ok: false,
+        message: "El estudiante no pertenece al curso de la actividad.",
+      });
+    }
+
+    const id = await notaModel.upsertNotaActividad({
+      actividadId,
+      estudianteId,
+      nota: notaNum,
+      observacion: req.body.observacion?.trim() || null,
+    });
+
+    return res.json({
+      ok: true,
+      message: "Nota guardada correctamente.",
+      data: await notaModel.findNotaActividadById(id),
     });
   } catch (error) {
     return next(error);
@@ -97,8 +262,8 @@ const createNota = async (req, res, next) => {
     }
 
     const notaNum = Number(nota);
-    if (isNaN(notaNum) || notaNum < 0 || notaNum > 5) {
-      return res.status(400).json({ ok: false, message: "La nota debe ser un numero entre 0.00 y 5.00." });
+    if (isNaN(notaNum) || notaNum < 1 || notaNum > 5) {
+      return res.status(400).json({ ok: false, message: "La nota debe ser un numero entre 1.0 y 5.0." });
     }
 
     const estudianteValido = await notaModel.estudiantePerteneceCurso(
@@ -160,8 +325,8 @@ const updateNota = async (req, res, next) => {
 
     if (req.body.nota !== undefined && req.body.nota !== "") {
       const notaNum = Number(req.body.nota);
-      if (isNaN(notaNum) || notaNum < 0 || notaNum > 5) {
-        return res.status(400).json({ ok: false, message: "La nota debe ser un numero entre 0.00 y 5.00." });
+      if (isNaN(notaNum) || notaNum < 1 || notaNum > 5) {
+        return res.status(400).json({ ok: false, message: "La nota debe ser un numero entre 1.0 y 5.0." });
       }
       req.body.nota = notaNum;
     }
@@ -209,4 +374,14 @@ const deleteNota = async (req, res, next) => {
   }
 };
 
-module.exports = { getAllNotas, getNotaById, getNotaCatalog, getNotasPorCurso, createNota, updateNota, deleteNota };
+module.exports = {
+  getAllNotas,
+  getNotaById,
+  getNotaCatalog,
+  getNotasPorCurso,
+  createActividad,
+  upsertNotaActividad,
+  createNota,
+  updateNota,
+  deleteNota,
+};

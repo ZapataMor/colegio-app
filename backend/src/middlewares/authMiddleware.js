@@ -31,4 +31,19 @@ const authenticate = (req, res, next) => {
   }
 };
 
-module.exports = { authenticate };
+const authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    const role = req.user?.rol;
+
+    if (!role || !allowedRoles.includes(role)) {
+      return res.status(403).json({
+        ok: false,
+        message: "No tienes permisos para realizar esta accion.",
+      });
+    }
+
+    return next();
+  };
+};
+
+module.exports = { authenticate, authorizeRoles };

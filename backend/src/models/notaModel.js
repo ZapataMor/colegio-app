@@ -74,55 +74,88 @@ const findById = async (id) => {
 };
 
 const getCatalog = async ({ profesorPersonaId = null } = {}) => {
-  const [estudiantes] = await pool.query(
-    `SELECT e.id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre, p.documento, c.nombre AS curso_nombre, e.curso_id
-     FROM estudiantes e
-     INNER JOIN personas p ON p.id = e.persona_id
-     INNER JOIN cursos c ON c.id = e.curso_id
-     WHERE e.estado = 'activo'
-     ORDER BY p.apellidos, p.nombres ASC`
-  );
+  if (!profesorPersonaId) {
+    const [estudiantes] = await pool.query(
+      `SELECT e.id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre, p.documento, c.nombre AS curso_nombre, e.curso_id
+       FROM estudiantes e
+       INNER JOIN personas p ON p.id = e.persona_id
+       INNER JOIN cursos c ON c.id = e.curso_id
+       WHERE e.estado = 'activo'
+       ORDER BY p.apellidos, p.nombres ASC`
+    );
 
-  const [asignaturas] = profesorPersonaId
-    ? await pool.query(
-        `SELECT DISTINCT a.id, a.nombre, h.curso_id
-         FROM horarios h
-         INNER JOIN profesores pr ON pr.id = h.profesor_id
-         INNER JOIN asignaturas a ON a.id = h.asignatura_id
-         WHERE pr.persona_id = ? AND h.estado = 'activo' AND a.estado = 'activo'
-         ORDER BY a.nombre ASC`,
-        [profesorPersonaId]
-      )
-    : await pool.query(
-        `SELECT id, nombre FROM asignaturas WHERE estado = 'activo' ORDER BY nombre ASC`
-      );
+    const [asignaturas] = await pool.query(
+      `SELECT id, nombre FROM asignaturas WHERE estado = 'activo' ORDER BY nombre ASC`
+    );
 
-  const [profesores] = profesorPersonaId
-    ? await pool.query(
-        `SELECT pr.id, pr.persona_id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
-         FROM profesores pr
-         INNER JOIN personas p ON p.id = pr.persona_id
-         WHERE pr.estado = 'activo' AND pr.persona_id = ?
-         ORDER BY p.apellidos, p.nombres ASC`,
-        [profesorPersonaId]
-      )
-    : await pool.query(
-        `SELECT pr.id, pr.persona_id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
-         FROM profesores pr
-         INNER JOIN personas p ON p.id = pr.persona_id
-         WHERE pr.estado = 'activo'
-         ORDER BY p.apellidos, p.nombres ASC`
-      );
+    const [profesores] = await pool.query(
+      `SELECT pr.id, pr.persona_id, CONCAT(p.nombres, ' ', p.apellidos) AS nombre
+       FROM profesores pr
+       INNER JOIN personas p ON p.id = pr.persona_id
+       WHERE pr.estado = 'activo'
+       ORDER BY p.apellidos, p.nombres ASC`
+    );
 
-  const [periodos] = await pool.query(
-    `SELECT id, nombre, estado FROM periodos_academicos ORDER BY fecha_inicio DESC`
-  );
+    const [periodos] = await pool.query(
+      `SELECT id, nombre, estado FROM periodos_academicos ORDER BY fecha_inicio DESC`
+    );
+
+    const [cursos] = await pool.query(
+      `SELECT id, nombre FROM cursos WHERE estado = 'activo' ORDER BY nombre ASC`
+    );
+
+    return { estudiantes, asignaturas, profesores, periodos, cursos };
+  }
+
+  const params = [];
+  const profesorJoinFilter = "AND pr.persona_id = ?";
+  params.push(profesorPersonaId);
 
   const [cursos] = await pool.query(
-    `SELECT id, nombre FROM cursos WHERE estado = 'activo' ORDER BY nombre ASC`
+    `SELECT DISTINCT c.id, c.nombre
+     FROM cursos c
+     INNER JOIN horarios h ON h.curso_id = c.id AND h.estado = 'activo'
+     INNER JOIN profesores pr ON pr.id = h.profesor_id AND pr.estado = 'activo'
+     WHERE c.estado = 'activo' ${profesorJoinFilter}
+     ORDER BY c.nombre ASC`,
+    params
   );
 
-  return { estudiantes, asignaturas, profesores, periodos, cursos };
+  const [asignaturas] = await pool.query(
+    `SELECT DISTINCT a.id, a.nombre, h.curso_id
+     FROM horarios h
+     INNER JOIN profesores pr ON pr.id = h.profesor_id AND pr.estado = 'activo'
+     INNER JOIN asignaturas a ON a.id = h.asignatura_id
+     INNER JOIN cursos c ON c.id = h.curso_id
+     WHERE h.estado = 'activo' AND a.estado = 'activo' AND c.estado = 'activo' ${profesorJoinFilter}
+     ORDER BY a.nombre ASC`,
+    params
+  );
+
+  const [profesores] = await pool.query(
+     `SELECT DISTINCT
+       pr.id,
+       pr.persona_id,
+       CONCAT(p.nombres, ' ', p.apellidos) AS nombre,
+       p.apellidos,
+       p.nombres,
+       h.curso_id,
+       h.asignatura_id
+     FROM profesores pr
+     INNER JOIN personas p ON p.id = pr.persona_id
+     INNER JOIN horarios h ON h.profesor_id = pr.id AND h.estado = 'activo'
+     WHERE pr.estado = 'activo' ${profesorJoinFilter}
+     ORDER BY p.apellidos, p.nombres ASC`,
+    params
+  );
+
+  const [periodos] = await pool.query(
+    `SELECT id, nombre, fecha_inicio, fecha_fin, estado
+     FROM periodos_academicos
+     ORDER BY fecha_inicio DESC`
+  );
+
+  return { asignaturas, profesores, periodos, cursos };
 };
 
 const create = async ({ estudianteId, cursoId, asignaturaId, profesorId, periodoId, nota, observacion }) => {
@@ -198,8 +231,7 @@ const profesorTieneClase = async ({ profesorId, cursoId, asignaturaId }) => {
   return Boolean(rows[0]);
 };
 
-const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {}) => {
-  // Query 1: cursos activos con sus estudiantes activos
+const findNotasFinalesPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {}) => {
   const cursoParams = [];
   const profesorCursoJoin = profesorPersonaId
     ? `INNER JOIN (
@@ -214,9 +246,9 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
 
   const [filas] = await pool.query(
     `SELECT
-      c.id   AS curso_id,
+      c.id AS curso_id,
       c.nombre AS curso_nombre,
-      e.id   AS estudiante_id,
+      e.id AS estudiante_id,
       CONCAT(p.nombres, ' ', p.apellidos) AS estudiante_nombre,
       p.documento
     FROM cursos c
@@ -228,11 +260,12 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
     cursoParams
   );
 
-  // Query 2: todas las notas (filtradas por periodo si se indica)
+  // La definitiva de cada asignatura es el promedio de las notas de las
+  // actividades que cada profesor registra en notas_actividades.
   const notasParams = [];
   let notasWhere = "";
   if (periodoId) {
-    notasWhere = "WHERE n.periodo_id = ?";
+    notasWhere = "WHERE ac.periodo_id = ?";
     notasParams.push(periodoId);
   }
 
@@ -243,33 +276,33 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
 
   const [notasRows] = await pool.query(
     `SELECT
-      n.id          AS nota_id,
-      n.estudiante_id,
-      n.curso_id,
-      n.asignatura_id,
-      n.profesor_id,
-      n.periodo_id,
-      n.nota,
-      n.observacion,
-      a.nombre      AS asignatura,
+      na.estudiante_id,
+      ac.curso_id,
+      ac.asignatura_id,
+      ac.profesor_id,
+      ac.periodo_id,
+      ROUND(AVG(na.nota), 1) AS nota,
+      COUNT(*) AS total_actividades,
+      a.nombre AS asignatura,
       CONCAT(pp.nombres, ' ', pp.apellidos) AS profesor,
-      per.nombre    AS periodo
-    FROM notas n
-    INNER JOIN asignaturas a  ON a.id  = n.asignatura_id
-    INNER JOIN profesores pr  ON pr.id = n.profesor_id
-    INNER JOIN personas pp    ON pp.id = pr.persona_id
-    INNER JOIN periodos_academicos per ON per.id = n.periodo_id
+      per.nombre AS periodo
+    FROM notas_actividades na
+    INNER JOIN actividades ac ON ac.id = na.actividad_id
+    INNER JOIN asignaturas a ON a.id = ac.asignatura_id
+    INNER JOIN profesores pr ON pr.id = ac.profesor_id
+    INNER JOIN personas pp ON pp.id = pr.persona_id
+    INNER JOIN periodos_academicos per ON per.id = ac.periodo_id
     ${notasWhere}
-    ORDER BY n.estudiante_id ASC, a.nombre ASC`,
+    GROUP BY na.estudiante_id, ac.curso_id, ac.asignatura_id, ac.profesor_id, ac.periodo_id, a.nombre, profesor, per.nombre
+    ORDER BY na.estudiante_id ASC, a.nombre ASC`,
     notasParams
   );
 
-  // Indexar notas por estudiante_id
   const notasPorEstudiante = {};
   for (const n of notasRows) {
     if (!notasPorEstudiante[n.estudiante_id]) notasPorEstudiante[n.estudiante_id] = [];
     notasPorEstudiante[n.estudiante_id].push({
-      notaId: n.nota_id,
+      notaId: null,
       asignatura: n.asignatura,
       asignaturaId: n.asignatura_id,
       profesor: n.profesor,
@@ -277,11 +310,10 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
       periodo: n.periodo,
       periodoId: n.periodo_id,
       nota: Number(n.nota),
-      observacion: n.observacion ?? null,
+      observacion: null,
     });
   }
 
-  // Agrupar por curso
   const cursosMap = new Map();
   for (const fila of filas) {
     if (!cursosMap.has(fila.curso_id)) {
@@ -291,6 +323,7 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
         estudiantes: [],
       });
     }
+
     if (fila.estudiante_id) {
       cursosMap.get(fila.curso_id).estudiantes.push({
         estudianteId: fila.estudiante_id,
@@ -304,15 +337,228 @@ const findPorCurso = async ({ periodoId = null, profesorPersonaId = null } = {})
   return Array.from(cursosMap.values());
 };
 
+const periodoExists = async (periodoId) => {
+  const [rows] = await pool.query(
+    `SELECT id FROM periodos_academicos WHERE id = ? LIMIT 1`,
+    [periodoId]
+  );
+  return Boolean(rows[0]);
+};
+
+const findActividadById = async (id) => {
+  const [rows] = await pool.query(
+    `SELECT
+       ac.id,
+       ac.titulo,
+       ac.descripcion,
+       ac.fecha,
+       ac.curso_id,
+       ac.asignatura_id,
+       ac.profesor_id,
+       ac.periodo_id,
+       c.nombre AS curso_nombre,
+       s.nombre AS asignatura_nombre,
+       per.nombre AS periodo_nombre,
+       pr.persona_id AS profesor_persona_id,
+       CONCAT(pp.nombres, ' ', pp.apellidos) AS profesor_nombre
+     FROM actividades ac
+     INNER JOIN cursos c ON c.id = ac.curso_id
+     INNER JOIN asignaturas s ON s.id = ac.asignatura_id
+     INNER JOIN periodos_academicos per ON per.id = ac.periodo_id
+     INNER JOIN profesores pr ON pr.id = ac.profesor_id
+     INNER JOIN personas pp ON pp.id = pr.persona_id
+     WHERE ac.id = ?
+     LIMIT 1`,
+    [id]
+  );
+
+  return rows[0] || null;
+};
+
+const findPorCurso = async ({
+  periodoId = null,
+  cursoId = null,
+  asignaturaId = null,
+  profesorPersonaId = null,
+} = {}) => {
+  if (!periodoId || !cursoId || !asignaturaId) {
+    return null;
+  }
+
+  const profesorParams = profesorPersonaId ? [profesorPersonaId] : [];
+  const profesorFilter = profesorPersonaId ? "AND pr.persona_id = ?" : "";
+
+  const [cursoRows] = await pool.query(
+    `SELECT DISTINCT c.id AS curso_id, c.nombre AS curso_nombre
+     FROM cursos c
+     INNER JOIN horarios h ON h.curso_id = c.id AND h.estado = 'activo'
+     INNER JOIN profesores pr ON pr.id = h.profesor_id AND pr.estado = 'activo'
+     WHERE c.id = ? AND h.asignatura_id = ? AND c.estado = 'activo' ${profesorFilter}
+     LIMIT 1`,
+    [cursoId, asignaturaId, ...profesorParams]
+  );
+
+  if (!cursoRows[0]) {
+    return null;
+  }
+
+  const [asignaturaRows] = await pool.query(
+    `SELECT id, nombre FROM asignaturas WHERE id = ? AND estado = 'activo' LIMIT 1`,
+    [asignaturaId]
+  );
+
+  const [periodoRows] = await pool.query(
+    `SELECT id, nombre FROM periodos_academicos WHERE id = ? LIMIT 1`,
+    [periodoId]
+  );
+
+  const [estudiantesRows] = await pool.query(
+    `SELECT
+       e.id AS estudiante_id,
+       CONCAT(p.nombres, ' ', p.apellidos) AS estudiante_nombre,
+       p.documento
+     FROM estudiantes e
+     INNER JOIN personas p ON p.id = e.persona_id
+     WHERE e.curso_id = ? AND e.estado = 'activo'
+     ORDER BY p.apellidos ASC, p.nombres ASC`,
+    [cursoId]
+  );
+
+  const [actividadesRows] = await pool.query(
+    `SELECT
+       ac.id,
+       ac.titulo,
+       ac.fecha,
+       ac.descripcion,
+       ac.profesor_id,
+       CONCAT(pp.nombres, ' ', pp.apellidos) AS profesor_nombre
+     FROM actividades ac
+     INNER JOIN profesores pr ON pr.id = ac.profesor_id
+     INNER JOIN personas pp ON pp.id = pr.persona_id
+     WHERE ac.curso_id = ?
+       AND ac.asignatura_id = ?
+       AND ac.periodo_id = ?
+       ${profesorFilter}
+     ORDER BY ac.fecha ASC, ac.id ASC`,
+    [cursoId, asignaturaId, periodoId, ...profesorParams]
+  );
+
+  const actividadIds = actividadesRows.map((actividad) => actividad.id);
+  let notasRows = [];
+
+  if (actividadIds.length) {
+    const placeholders = actividadIds.map(() => "?").join(", ");
+    const [rows] = await pool.query(
+      `SELECT id, actividad_id, estudiante_id, nota, observacion
+       FROM notas_actividades
+       WHERE actividad_id IN (${placeholders})
+       ORDER BY estudiante_id ASC`,
+      actividadIds
+    );
+    notasRows = rows;
+  }
+
+  const notasPorEstudiante = {};
+  for (const row of notasRows) {
+    const key = String(row.estudiante_id);
+    if (!notasPorEstudiante[key]) notasPorEstudiante[key] = [];
+    notasPorEstudiante[key].push({
+      notaId: row.id,
+      actividadId: row.actividad_id,
+      nota: Number(row.nota),
+      observacion: row.observacion ?? null,
+    });
+  }
+
+  const estudiantes = estudiantesRows.map((row) => {
+    const notas = notasPorEstudiante[String(row.estudiante_id)] ?? [];
+    const definitiva = notas.length
+      ? Number((notas.reduce((sum, item) => sum + Number(item.nota), 0) / notas.length).toFixed(1))
+      : null;
+
+    return {
+      estudianteId: row.estudiante_id,
+      estudianteNombre: row.estudiante_nombre,
+      documento: row.documento,
+      notas,
+      definitiva,
+    };
+  });
+
+  return {
+    cursoId: cursoRows[0].curso_id,
+    cursoNombre: cursoRows[0].curso_nombre,
+    asignaturaId,
+    asignaturaNombre: asignaturaRows[0]?.nombre || "",
+    periodoId,
+    periodoNombre: periodoRows[0]?.nombre || "",
+    actividades: actividadesRows.map((row) => ({
+      id: row.id,
+      titulo: row.titulo,
+      fecha: row.fecha instanceof Date ? row.fecha.toISOString().slice(0, 10) : String(row.fecha).slice(0, 10),
+      descripcion: row.descripcion ?? null,
+      profesorId: row.profesor_id,
+      profesorNombre: row.profesor_nombre,
+    })),
+    estudiantes,
+  };
+};
+
+const createActividad = async ({ titulo, fecha, cursoId, asignaturaId, periodoId, profesorId, descripcion = null }) => {
+  const [result] = await pool.query(
+    `INSERT INTO actividades (titulo, fecha, curso_id, asignatura_id, periodo_id, profesor_id, descripcion)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [titulo, fecha, cursoId, asignaturaId, periodoId, profesorId, descripcion]
+  );
+  return result.insertId;
+};
+
+const upsertNotaActividad = async ({ actividadId, estudianteId, nota, observacion = null }) => {
+  const [result] = await pool.query(
+    `INSERT INTO notas_actividades (actividad_id, estudiante_id, nota, observacion)
+     VALUES (?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       nota = VALUES(nota),
+       observacion = VALUES(observacion),
+       updated_at = CURRENT_TIMESTAMP`,
+    [actividadId, estudianteId, nota, observacion]
+  );
+
+  if (result.insertId) return result.insertId;
+
+  const [rows] = await pool.query(
+    `SELECT id FROM notas_actividades WHERE actividad_id = ? AND estudiante_id = ? LIMIT 1`,
+    [actividadId, estudianteId]
+  );
+  return rows[0]?.id || null;
+};
+
+const findNotaActividadById = async (id) => {
+  const [rows] = await pool.query(
+    `SELECT id, actividad_id, estudiante_id, nota, observacion
+     FROM notas_actividades
+     WHERE id = ?
+     LIMIT 1`,
+    [id]
+  );
+  return rows[0] || null;
+};
+
 module.exports = {
   findAll,
   findById,
   getCatalog,
   findPorCurso,
+  findNotasFinalesPorCurso,
   findProfesorByPersonaId,
   findPersonaIdByUsuarioId,
   estudiantePerteneceCurso,
   profesorTieneClase,
+  periodoExists,
+  findActividadById,
+  createActividad,
+  upsertNotaActividad,
+  findNotaActividadById,
   create,
   update,
   deleteNota,

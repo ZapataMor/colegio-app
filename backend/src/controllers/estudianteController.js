@@ -1,4 +1,5 @@
 const estudianteModel = require("../models/estudianteModel");
+const cursoModel = require("../models/cursoModel");
 
 /**
  * GET /api/estudiantes
@@ -86,6 +87,21 @@ const createEstudiante = async (req, res, next) => {
       });
     }
 
+    const curso = await cursoModel.findById(cursoId);
+    if (!curso) {
+      return res.status(400).json({
+        ok: false,
+        message: "El curso seleccionado no existe.",
+      });
+    }
+
+    if (Number(curso.estudiantes_actuales) >= Number(curso.max_students)) {
+      return res.status(409).json({
+        ok: false,
+        message: "El curso ya alcanzo su capacidad maxima de estudiantes.",
+      });
+    }
+
     // Verifica si el documento ya existe
     const estudianteExistente = await estudianteModel.findByDocumento(documento);
     if (estudianteExistente) {
@@ -166,6 +182,23 @@ const updateEstudiante = async (req, res, next) => {
         return res.status(409).json({
           ok: false,
           message: "El documento ya está registrado por otro estudiante.",
+        });
+      }
+    }
+
+    if (cursoId !== undefined && Number(cursoId) !== Number(estudianteExistente.curso_id)) {
+      const curso = await cursoModel.findById(cursoId);
+      if (!curso) {
+        return res.status(400).json({
+          ok: false,
+          message: "El curso seleccionado no existe.",
+        });
+      }
+
+      if (Number(curso.estudiantes_actuales) >= Number(curso.max_students)) {
+        return res.status(409).json({
+          ok: false,
+          message: "El curso ya alcanzo su capacidad maxima de estudiantes.",
         });
       }
     }

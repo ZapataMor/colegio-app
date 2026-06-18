@@ -8,6 +8,8 @@ const rolRoutes = require("./routes/rolRoutes");
 const matriculaRoutes = require("./routes/matriculaRoutes");
 const personaRoutes = require("./routes/personaRoutes");
 const salonRoutes = require("./routes/salonRoutes");
+const gradoRoutes = require("./routes/gradoRoutes");
+const cursoRoutes = require("./routes/cursoRoutes");
 const horarioRoutes = require("./routes/horarioRoutes");
 const asistenciaRoutes = require("./routes/asistenciaRoutes");
 const comunicadoRoutes = require("./routes/comunicadoRoutes");
@@ -51,17 +53,6 @@ app.use("/", authRoutes);
 // A partir de aquí todas las rutas /api/* requieren token JWT válido
 app.use("/api", authenticate);
 
-app.get("/api/cursos", async (req, res, next) => {
-  try {
-    const [rows] = await pool.query(
-      "SELECT id, nombre, nivel, jornada, estado FROM cursos ORDER BY nombre ASC"
-    );
-    res.json({ ok: true, data: rows });
-  } catch (error) {
-    next(error);
-  }
-});
-
 app.get("/api/asignaturas", async (req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -80,6 +71,8 @@ app.use("/", rolRoutes);
 app.use("/", matriculaRoutes);
 app.use("/", personaRoutes);
 app.use("/", salonRoutes);
+app.use("/", gradoRoutes);
+app.use("/", cursoRoutes);
 app.use("/", horarioRoutes);
 app.use("/", asistenciaRoutes);
 app.use("/", comunicadoRoutes);

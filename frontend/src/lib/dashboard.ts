@@ -60,6 +60,13 @@ export const MODULOS_ADMIN: Modulo[] = [
     ruta: '/(dashboard)/estudiantes',
   },
   {
+    id: 'grados',
+    nombre: 'Grados',
+    descripcion: 'Gestion de grados, cursos y cupos',
+    icon: CrudIcons.academicCap,
+    ruta: '/(dashboard)/grados',
+  },
+  {
     id: 'profesores',
     nombre: 'Profesores',
     descripcion: 'Gestion de profesores y docentes',

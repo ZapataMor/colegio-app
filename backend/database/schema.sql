@@ -30,6 +30,7 @@ DROP TABLE IF EXISTS estudiantes;
 DROP TABLE IF EXISTS profesores;
 DROP TABLE IF EXISTS acudientes;
 DROP TABLE IF EXISTS cursos;
+DROP TABLE IF EXISTS grados;
 DROP TABLE IF EXISTS usuarios;
 DROP TABLE IF EXISTS persona_roles;
 DROP TABLE IF EXISTS personas;
@@ -95,16 +96,36 @@ CREATE TABLE persona_roles (
   INDEX idx_persona_roles_estado (estado)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE grados (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(80) NOT NULL UNIQUE,
+  numeric_level TINYINT UNSIGNED NULL UNIQUE,
+  education_level VARCHAR(80),
+  status ENUM('activo','inactivo') NOT NULL DEFAULT 'activo',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_grados_status (status),
+  INDEX idx_grados_numeric_level (numeric_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE cursos (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  grade_id INT UNSIGNED NOT NULL,
+  nomenclature VARCHAR(20) NOT NULL,
+  full_name VARCHAR(60) NOT NULL UNIQUE,
   nombre VARCHAR(50) NOT NULL UNIQUE,
   nivel VARCHAR(50) NOT NULL,
+  max_students INT UNSIGNED NOT NULL DEFAULT 35,
   jornada ENUM('mañana','tarde','noche','unica') NOT NULL DEFAULT 'mañana',
   estado ENUM('activo','inactivo') NOT NULL DEFAULT 'activo',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_cursos_grados FOREIGN KEY (grade_id) REFERENCES grados(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+  UNIQUE KEY uq_cursos_grado_nomenclature (grade_id, nomenclature),
   INDEX idx_cursos_estado (estado),
-  INDEX idx_cursos_nivel (nivel)
+  INDEX idx_cursos_nivel (nivel),
+  INDEX idx_cursos_grade_id (grade_id),
+  CHECK (max_students > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE estudiantes (
@@ -379,7 +400,7 @@ CREATE TABLE notas_actividades (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_notas_act_actividades FOREIGN KEY (actividad_id) REFERENCES actividades(id) ON UPDATE CASCADE ON DELETE CASCADE,
   CONSTRAINT fk_notas_act_estudiantes FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON UPDATE CASCADE ON DELETE CASCADE,
-  CONSTRAINT chk_notas_act_rango CHECK (nota >= 0.00 AND nota <= 5.00),
+  CONSTRAINT chk_notas_act_rango CHECK (nota >= 1.00 AND nota <= 5.00),
   UNIQUE KEY uq_nota_actividad_estudiante (actividad_id, estudiante_id),
   INDEX idx_notas_act_actividad_id (actividad_id),
   INDEX idx_notas_act_estudiante_id (estudiante_id)
@@ -400,40 +421,36 @@ INSERT INTO areas (nombre, descripcion) VALUES
 ('Educación Física', 'Deporte y salud'),
 ('Arte y Cultura', 'Expresion artistica y musical');
 
-INSERT INTO cursos (nombre, nivel) VALUES
-('1A', 'Basica primaria'),
-('1B', 'Basica primaria'),
-('1C', 'Basica primaria'),
-('2A', 'Basica primaria'),
-('2B', 'Basica primaria'),
-('2C', 'Basica primaria'),
-('3A', 'Basica primaria'),
-('3B', 'Basica primaria'),
-('3C', 'Basica primaria'),
-('4A', 'Basica primaria'),
-('4B', 'Basica primaria'),
-('4C', 'Basica primaria'),
-('5A', 'Basica primaria'),
-('5B', 'Basica primaria'),
-('5C', 'Basica primaria'),
-('6A', 'Basica secundaria'),
-('6B', 'Basica secundaria'),
-('6C', 'Basica secundaria'),
-('7A', 'Basica secundaria'),
-('7B', 'Basica secundaria'),
-('7C', 'Basica secundaria'),
-('8A', 'Basica secundaria'),
-('8B', 'Basica secundaria'),
-('8C', 'Basica secundaria'),
-('9A', 'Basica secundaria'),
-('9B', 'Basica secundaria'),
-('9C', 'Basica secundaria'),
-('10A', 'Media academica'),
-('10B', 'Media academica'),
-('10C', 'Media academica'),
-('11A', 'Media academica'),
-('11B', 'Media academica'),
-('11C', 'Media academica');
+INSERT INTO grados (nombre, numeric_level, education_level) VALUES
+('Primero', 1, 'Basica primaria'),
+('Segundo', 2, 'Basica primaria'),
+('Tercero', 3, 'Basica primaria'),
+('Cuarto', 4, 'Basica primaria'),
+('Quinto', 5, 'Basica primaria'),
+('Sexto', 6, 'Basica secundaria'),
+('Septimo', 7, 'Basica secundaria'),
+('Octavo', 8, 'Basica secundaria'),
+('Noveno', 9, 'Basica secundaria'),
+('Decimo', 10, 'Media academica'),
+('Once', 11, 'Media academica');
+
+INSERT INTO cursos (grade_id, nomenclature, full_name, nombre, nivel, max_students)
+SELECT g.id, x.nomenclature, CONCAT(g.numeric_level, x.nomenclature), CONCAT(g.numeric_level, x.nomenclature), g.education_level, 35
+FROM grados g
+INNER JOIN (
+  SELECT 1 AS numeric_level, 'A' AS nomenclature UNION ALL
+  SELECT 1, 'B' UNION ALL SELECT 1, 'C' UNION ALL
+  SELECT 2, 'A' UNION ALL SELECT 2, 'B' UNION ALL SELECT 2, 'C' UNION ALL
+  SELECT 3, 'A' UNION ALL SELECT 3, 'B' UNION ALL SELECT 3, 'C' UNION ALL
+  SELECT 4, 'A' UNION ALL SELECT 4, 'B' UNION ALL SELECT 4, 'C' UNION ALL
+  SELECT 5, 'A' UNION ALL SELECT 5, 'B' UNION ALL SELECT 5, 'C' UNION ALL
+  SELECT 6, 'A' UNION ALL SELECT 6, 'B' UNION ALL SELECT 6, 'C' UNION ALL
+  SELECT 7, 'A' UNION ALL SELECT 7, 'B' UNION ALL SELECT 7, 'C' UNION ALL
+  SELECT 8, 'A' UNION ALL SELECT 8, 'B' UNION ALL SELECT 8, 'C' UNION ALL
+  SELECT 9, 'A' UNION ALL SELECT 9, 'B' UNION ALL SELECT 9, 'C' UNION ALL
+  SELECT 10, 'A' UNION ALL SELECT 10, 'B' UNION ALL SELECT 10, 'C' UNION ALL
+  SELECT 11, 'A' UNION ALL SELECT 11, 'B' UNION ALL SELECT 11, 'C'
+) x ON x.numeric_level = g.numeric_level;
 
 INSERT INTO asignaturas (area_id, nombre, descripcion) VALUES
 (1, 'Matemáticas', 'Aritmetica, algebra y geometria'),
