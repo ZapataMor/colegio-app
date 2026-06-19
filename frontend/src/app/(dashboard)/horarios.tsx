@@ -134,6 +134,10 @@ export default function HorariosScreen() {
     return <ProfesorMiHorarioScreen />;
   }
 
+  if (session?.rol === 'estudiante') {
+    return <EstudianteMiHorarioScreen />;
+  }
+
   return <AdminHorariosScreen />;
 }
 
@@ -1102,6 +1106,177 @@ function ProfesorMiHorarioScreen() {
         </ScrollView>
       )}
     </ScreenShell>
+  );
+}
+
+function EstudianteMiHorarioScreen() {
+  const theme = useTheme();
+  const router = useRouter();
+  const session = getUserSession();
+  const [horarios, setHorarios] = useState<Horario[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const loadData = useCallback(async (isRefresh = false) => {
+    try {
+      if (!isRefresh) setLoading(true);
+      setError('');
+      const res = await apiFetch<Horario[]>('/api/horarios/mi-horario');
+      setHorarios(res.data ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar tu horario.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const cursoNombre = horarios[0]?.curso_nombre ?? '';
+
+  const stats = useMemo(() => {
+    const asignaturas = new Set(horarios.map((item) => item.asignatura_id)).size;
+    const docentes = new Set(horarios.map((item) => item.profesor_id)).size;
+    const dias = new Set(horarios.map((item) => item.dia_semana)).size;
+    return { bloques: horarios.length, asignaturas, docentes, dias };
+  }, [horarios]);
+
+  const timeSlots = useMemo(() => {
+    const slots = new Map<string, TimeSlot>();
+    for (const item of horarios) {
+      const key = `${item.hora_inicio}-${item.hora_fin}`;
+      if (!slots.has(key)) {
+        slots.set(key, {
+          key,
+          start: item.hora_inicio,
+          end: item.hora_fin,
+          label: `${sliceTime(item.hora_inicio)} - ${sliceTime(item.hora_fin)}`,
+        });
+      }
+    }
+    return Array.from(slots.values()).sort(
+      (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end)
+    );
+  }, [horarios]);
+
+  const scheduleRows = useMemo<ScheduleRow[]>(() => {
+    const byCell = new Map<string, Horario>();
+    for (const item of horarios) {
+      byCell.set(`${item.dia_semana}-${item.hora_inicio}-${item.hora_fin}`, item);
+    }
+    return timeSlots.map((slot) => ({
+      slot,
+      cells: DIAS.map((dia) => ({
+        dia: dia.value,
+        horario: byCell.get(`${dia.value}-${slot.start}-${slot.end}`) ?? null,
+      })),
+    }));
+  }, [horarios, timeSlots]);
+
+  const nombreCompleto =
+    `${session?.nombre ?? ''} ${session?.apellido ?? ''}`.trim() || 'Estudiante';
+
+  const goBack = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace('/(dashboard)/dashboard');
+  };
+
+  return (
+    <ScreenShell contentStyle={styles.shellContent}>
+      <View style={[styles.hero, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+        <View style={styles.heroTop}>
+          <Pressable onPress={goBack} style={[styles.teacherBackButton, { borderColor: theme.border, backgroundColor: theme.surfaceMuted }]}>
+            <ArrowLeftIcon width={18} height={18} color={theme.text} />
+          </Pressable>
+          <View style={[styles.heroIcon, { backgroundColor: `${theme.primary}20` }]}>
+            <CalendarDaysIcon width={22} height={22} color={theme.primary} />
+          </View>
+          <View style={styles.heroCopy}>
+            <ThemedText type="small" style={[styles.kicker, { color: theme.warning }]}>
+              Mi semana
+            </ThemedText>
+            <ThemedText type="title" style={[styles.heroTitle, { color: theme.text }]}>
+              Mi horario
+            </ThemedText>
+            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+              El horario de tu curso se carga automaticamente.
+            </ThemedText>
+          </View>
+        </View>
+      </View>
+
+      {loading ? (
+        <SkeletonList />
+      ) : error ? (
+        <ErrorState
+          message={error}
+          onRetry={() => {
+            setLoading(true);
+            loadData();
+          }}
+        />
+      ) : (
+        <ScrollView
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadData(true);
+              }}
+            />
+          }
+          contentContainerStyle={styles.page}>
+          <StudentScheduleSummary
+            nombre={nombreCompleto}
+            curso={cursoNombre || 'Sin curso asignado'}
+            bloques={stats.bloques}
+          />
+
+          <View style={styles.statsGrid}>
+            <StatCard label="Bloques" value={String(stats.bloques)} />
+            <StatCard label="Asignaturas" value={String(stats.asignaturas)} />
+            <StatCard label="Docentes" value={String(stats.docentes)} />
+            <StatCard label="Dias" value={String(stats.dias)} />
+          </View>
+
+          {horarios.length === 0 ? (
+            <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
+              <ThemedText style={{ color: theme.textSecondary, textAlign: 'center' }}>
+                Tu curso no tiene horarios registrados todavia.
+              </ThemedText>
+            </ThemedView>
+          ) : (
+            <WeeklyScheduleTable canManage={false} rows={scheduleRows} />
+          )}
+        </ScrollView>
+      )}
+    </ScreenShell>
+  );
+}
+
+function StudentScheduleSummary({ nombre, curso, bloques }: { nombre: string; curso: string; bloques: number }) {
+  const theme = useTheme();
+
+  return (
+    <View style={[styles.roomSummary, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View style={[styles.roomIcon, { backgroundColor: `${theme.primary}20` }]}>
+        <AcademicCapIcon width={18} height={18} color={theme.primary} />
+      </View>
+      <View style={styles.roomCopy}>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {nombre}
+        </ThemedText>
+        <ThemedText style={[styles.roomName, { color: theme.text }]}>{curso}</ThemedText>
+        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+          {bloques} bloque{bloques === 1 ? '' : 's'} en la semana
+        </ThemedText>
+      </View>
+    </View>
   );
 }
 

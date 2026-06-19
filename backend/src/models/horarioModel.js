@@ -212,6 +212,19 @@ const getCatalog = async () => {
   return { cursos, profesores, asignaturas, salones };
 };
 
+// Resuelve el curso del estudiante a partir de la persona del usuario autenticado.
+const findEstudianteCursoByPersonaId = async (personaId) => {
+  const [rows] = await pool.query(
+    `SELECT e.id AS estudiante_id, e.curso_id, c.nombre AS curso_nombre, c.nivel AS curso_nivel
+     FROM estudiantes e
+     INNER JOIN cursos c ON c.id = e.curso_id
+     WHERE e.persona_id = ? AND e.estado = 'activo'
+     LIMIT 1`,
+    [personaId]
+  );
+  return rows[0] || null;
+};
+
 module.exports = {
   findAll,
   findById,
@@ -222,4 +235,5 @@ module.exports = {
   findSameAsignaturaDay,
   findOverlapsByField,
   getCatalog,
+  findEstudianteCursoByPersonaId,
 };

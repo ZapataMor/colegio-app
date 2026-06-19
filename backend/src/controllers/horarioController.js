@@ -29,10 +29,10 @@ const getAllHorarios = async (req, res, next) => {
 
 const getMiHorario = async (req, res, next) => {
   try {
-    if (req.user?.rol !== "profesor") {
+    if (!["profesor", "estudiante"].includes(req.user?.rol)) {
       return res.status(403).json({
         ok: false,
-        message: "Solo un profesor puede consultar su horario asignado.",
+        message: "Solo un profesor o estudiante puede consultar su horario.",
       });
     }
 
@@ -41,6 +41,33 @@ const getMiHorario = async (req, res, next) => {
       return res.status(403).json({
         ok: false,
         message: "Tu usuario no tiene una persona asociada.",
+      });
+    }
+
+    // El estudiante consulta el horario de su curso; el profesor el de sus clases.
+    if (req.user.rol === "estudiante") {
+      const estudiante = await horarioModel.findEstudianteCursoByPersonaId(personaId);
+      if (!estudiante) {
+        return res.status(403).json({
+          ok: false,
+          message: "Tu usuario no tiene un curso asignado.",
+        });
+      }
+
+      const horarios = await horarioModel.findAll({
+        cursoId: estudiante.curso_id,
+        estado: "activo",
+      });
+
+      return res.json({
+        ok: true,
+        message: "Horario del estudiante obtenido correctamente.",
+        data: horarios,
+        meta: {
+          cursoId: estudiante.curso_id,
+          cursoNombre: estudiante.curso_nombre,
+          cursoNivel: estudiante.curso_nivel,
+        },
       });
     }
 

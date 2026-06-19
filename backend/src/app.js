@@ -17,6 +17,7 @@ const boletinRoutes = require("./routes/boletinRoutes");
 const periodoRoutes = require("./routes/periodoRoutes");
 const notaRoutes = require("./routes/notaRoutes");
 const asignaturaRoutes = require("./routes/asignaturaRoutes");
+const areaRoutes = require("./routes/areaRoutes");
 const meRoutes = require("./routes/meRoutes");
 const errorHandler = require("./middlewares/errorHandler");
 const { authenticate } = require("./middlewares/authMiddleware");
@@ -70,6 +71,7 @@ app.use("/", boletinRoutes);
 app.use("/", periodoRoutes);
 app.use("/", notaRoutes);
 app.use("/", asignaturaRoutes);
+app.use("/", areaRoutes);
 app.use("/", meRoutes);
 
 app.use(errorHandler);

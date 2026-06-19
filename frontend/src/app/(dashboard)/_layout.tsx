@@ -35,6 +35,7 @@ export default function DashboardLayout() {
           <Stack.Screen name="notas" />
           <Stack.Screen name="periodos" />
           <Stack.Screen name="asignaturas" />
+          <Stack.Screen name="areas" />
           <Stack.Screen name="mis-notas" />
           <Stack.Screen name="mis-asistencias" />
         </Stack>

@@ -74,6 +74,13 @@ export const MODULOS_ADMIN: Modulo[] = [
     ruta: '/(dashboard)/asignaturas',
   },
   {
+    id: 'areas',
+    nombre: 'Areas',
+    descripcion: 'Gestion de areas del conocimiento',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/areas',
+  },
+  {
     id: 'profesores',
     nombre: 'Profesores',
     descripcion: 'Gestion de profesores y docentes',
@@ -134,6 +141,13 @@ export const MODULOS_ESTUDIANTE: Modulo[] = [
     descripcion: 'Consulta tu historial de asistencia por materia.',
     icon: CrudIcons.checkCircle,
     ruta: '/(dashboard)/mis-asistencias',
+  },
+  {
+    id: 'mi-horario',
+    nombre: 'Mi horario',
+    descripcion: 'Consulta el horario semanal de tu curso.',
+    icon: CrudIcons.list,
+    ruta: '/(dashboard)/horarios',
   },
 ];
 
